@@ -31,6 +31,7 @@ class WalletApiIT {
 
     private void deposit(Object walletId, long amount, String currency) {
         client.post().uri("/v1/wallets/{id}/deposits", walletId)
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .body(Map.of("amount", amount, "currency", currency))
                 .exchange()
                 .expectStatus().isCreated()
@@ -92,6 +93,7 @@ class WalletApiIT {
     void refusesInvalidDeposits() {
         var wallet = createWallet(UUID.randomUUID(), "JPY");
         client.post().uri("/v1/wallets/{id}/deposits", wallet.get("id"))
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .body(Map.of("amount", -5, "currency", "USD"))
                 .exchange()
                 .expectStatus().isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT)

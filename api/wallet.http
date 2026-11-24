@@ -9,9 +9,10 @@ Content-Type: application/json
 
 {"owner_id": "{{owner}}", "currency": "USD"}
 
-### Deposit 10.50
+### Deposit 10.50. Send it twice: the second response is a replay, and the balance grows once.
 POST {{wallet}}/v1/wallets/{{created.response.body.id}}/deposits
 Content-Type: application/json
+Idempotency-Key: deposit-demo-1
 
 {"amount": 1050, "currency": "USD"}
 
@@ -31,5 +32,6 @@ Content-Type: application/json
 ### Transfer 3.00 to it
 POST {{wallet}}/v1/transfers
 Content-Type: application/json
+Idempotency-Key: transfer-demo-1
 
 {"from": "{{created.response.body.id}}", "to": "{{bob.response.body.id}}", "amount": 300, "currency": "USD"}

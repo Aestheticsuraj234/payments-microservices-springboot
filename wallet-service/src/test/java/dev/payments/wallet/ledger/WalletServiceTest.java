@@ -30,7 +30,8 @@ import org.mockito.InOrder;
  */
 class WalletServiceTest {
 
-    private final WalletProperties props = new WalletProperties(1_000_000, new WalletProperties.PageSize(20, 100));
+    private final WalletProperties props = new WalletProperties(1_000_000, new WalletProperties.PageSize(20, 100),
+            new WalletProperties.Idempotency(java.time.Duration.ofHours(24), java.time.Duration.ofMinutes(1)));
     private final LedgerRepository ledger = mock(LedgerRepository.class);
     private final WalletService service = new WalletService(ledger, new MoneyRules(props), props,
             new RetryingTransactions(new NoOpTransactionManager()));

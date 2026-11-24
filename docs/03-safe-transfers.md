@@ -256,4 +256,4 @@ these locking rules for *holds*, the building block of that saga.
 3. Change the isolation level to `SERIALIZABLE` and remove the locks. Which errors do you get now,
    and does the retry handle them?
 
-**Next:** Chapter 4 — Idempotency keys
+**Next:** [Chapter 4 — Idempotency keys](04-idempotency.md)

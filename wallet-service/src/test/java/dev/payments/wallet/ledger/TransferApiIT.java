@@ -25,6 +25,7 @@ class TransferApiIT {
         wallets.deposit(alice.id(), new Money(500, "EUR"));
 
         client.post().uri("/v1/transfers")
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .body(Map.of("from", alice.id().toString(), "to", bob.id().toString(), "amount", 300, "currency", "EUR"))
                 .exchange()
                 .expectStatus().isCreated()
@@ -34,6 +35,7 @@ class TransferApiIT {
                 .jsonPath("$.amount.amount").isEqualTo(300);
 
         client.post().uri("/v1/transfers")
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .body(Map.of("from", alice.id().toString(), "to", bob.id().toString(), "amount", 300, "currency", "EUR"))
                 .exchange()
                 .expectStatus().isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT)

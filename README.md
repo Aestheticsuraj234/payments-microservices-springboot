@@ -16,7 +16,7 @@ Spring way, explaining every decision along the way.
 | 01 | [Spring Boot foundations](docs/01-spring-boot-foundations.md) | `ch01-spring-boot-foundations` | Maven multi-module build, wallet-service skeleton, config, errors, logging | ✅ |
 | 02 | [The double-entry ledger](docs/02-double-entry-ledger.md) | `ch02-double-entry-ledger` | Flyway, `JdbcClient`, wallets, deposits, balances, pagination, Testcontainers | ✅ |
 | 03 | [Moving money safely](docs/03-safe-transfers.md) | `ch03-safe-transfers` | Row locks, lock ordering, retries, concurrency tests | ✅ |
-| 04 | Idempotency keys | `ch04-idempotency` | Exactly-once money movement over an unreliable network | planned |
+| 04 | [Idempotency keys](docs/04-idempotency.md) | `ch04-idempotency` | Exactly-once money movement over an unreliable network | ✅ |
 | 05 | The auth service | `ch05-auth-service` | A second service, database per service, Argon2, JWT, refresh tokens | planned |
 | 06 | The API gateway | `ch06-api-gateway` | Spring Cloud Gateway, JWT at the edge, Redis rate limits | planned |
 | 07 | Events and the outbox | `ch07-events-outbox` | Kafka, the transactional outbox pattern, a relay | planned |

@@ -29,12 +29,15 @@ class WalletPropertiesTest {
         runner.withPropertyValues(
                         "wallet.max-amount=500",
                         "wallet.page-size.default-size=10",
-                        "wallet.page-size.max=50")
+                        "wallet.page-size.max=50",
+                        "wallet.idempotency.ttl=24h",
+                        "wallet.idempotency.lease=1m")
                 .run(context -> {
                     var props = context.getBean(WalletProperties.class);
                     assertThat(props.maxAmount()).isEqualTo(500);
                     assertThat(props.pageSize().defaultSize()).isEqualTo(10);
                     assertThat(props.pageSize().max()).isEqualTo(50);
+                    assertThat(props.idempotency().ttl()).hasHours(24);
                 });
     }
 
@@ -43,7 +46,9 @@ class WalletPropertiesTest {
         runner.withPropertyValues(
                         "wallet.max-amount=-1",
                         "wallet.page-size.default-size=10",
-                        "wallet.page-size.max=50")
+                        "wallet.page-size.max=50",
+                        "wallet.idempotency.ttl=24h",
+                        "wallet.idempotency.lease=1m")
                 .run(context -> assertThat(context)
                         .hasFailed()
                         .getFailure().rootCause().hasMessageContaining("maxAmount"));

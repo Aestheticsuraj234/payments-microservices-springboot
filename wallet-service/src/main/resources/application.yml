@@ -37,3 +37,6 @@ wallet:
   page-size:
     default-size: 20
     max: 100
+  idempotency:
+    ttl: 24h
+    lease: 1m

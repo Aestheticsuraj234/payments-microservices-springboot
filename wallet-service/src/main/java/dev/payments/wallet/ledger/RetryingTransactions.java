@@ -8,6 +8,7 @@ import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -47,8 +48,16 @@ public class RetryingTransactions {
                 .build());
     }
 
-    /** Runs {@code work} in a transaction, retrying the whole transaction on collisions. */
+    /**
+     * Runs {@code work} in a transaction, retrying the whole transaction on
+     * collisions. Called inside a transaction that is already running, it just
+     * joins it: only the outermost caller owns the transaction, so only it may
+     * retry. Retrying inside would rerun statements in an aborted transaction.
+     */
     public <T> T run(Supplier<T> work) {
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            return work.get();
+        }
         return retry.invoke(() -> transactions.execute(status -> work.get()));
     }
 }
