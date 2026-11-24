@@ -1,0 +1,22 @@
+### Requests for the wallet service. Open in IntelliJ's HTTP client or VS Code's REST Client.
+@wallet = http://localhost:8081
+@owner = 7d3c5a8e-1111-4222-8333-944455556666
+
+### Open a wallet
+# @name created
+POST {{wallet}}/v1/wallets
+Content-Type: application/json
+
+{"owner_id": "{{owner}}", "currency": "USD"}
+
+### Deposit 10.50
+POST {{wallet}}/v1/wallets/{{created.response.body.id}}/deposits
+Content-Type: application/json
+
+{"amount": 1050, "currency": "USD"}
+
+### Balance
+GET {{wallet}}/v1/wallets/{{created.response.body.id}}/balance
+
+### Entries, newest first
+GET {{wallet}}/v1/wallets/{{created.response.body.id}}/entries?limit=20

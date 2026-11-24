@@ -5,8 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.payments.wallet.web.RequestIdFilter;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureRestTestClient;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.client.RestTestClient;
@@ -16,8 +14,7 @@ import org.springframework.test.web.servlet.client.RestTestClient;
  * HTTP. Slower than a slice test, so we keep few of these: they prove the
  * pieces are wired together.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@AutoConfigureRestTestClient
+@IntegrationTest
 class WalletApplicationIT {
 
     @Autowired

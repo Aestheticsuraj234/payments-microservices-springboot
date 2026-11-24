@@ -259,4 +259,4 @@ auth, transfer and notification services in later chapters follow the same layou
 3. Change the log pattern to JSON with Spring Boot's structured logging
    (`logging.structured.format.console=ecs`) and look at where the request ID ends up.
 
-**Next:** Chapter 2 — The double-entry ledger
+**Next:** [Chapter 2 — The double-entry ledger](02-double-entry-ledger.md)
