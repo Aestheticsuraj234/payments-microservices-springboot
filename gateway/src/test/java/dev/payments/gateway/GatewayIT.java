@@ -101,6 +101,16 @@ class GatewayIT {
     }
 
     @Test
+    void aSlowButHealthyServiceIsNotCutOff() {
+        // 1.5 s: within our 5 s response timeout. With Spring Cloud's default
+        // 1 s time limiter left on, this would have been a 503 from the fallback.
+        client.get().uri("/v1/wallets/slow")
+                .header("Authorization", "Bearer " + services.token(UUID.randomUUID()))
+                .exchange()
+                .expectStatus().isOk();
+    }
+
+    @Test
     void internalEndpointsAreNotReachableFromOutside() {
         client.get().uri("/internal/wallets/" + UUID.randomUUID())
                 .header("Authorization", "Bearer " + services.token(UUID.randomUUID()))

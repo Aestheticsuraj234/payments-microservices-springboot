@@ -39,11 +39,17 @@ final class FakeServices {
         }
         String jwks = new JWKSet(key.toPublicJWK()).toString();
         server.createContext("/.well-known/jwks.json", ex -> respond(ex, jwks));
-        server.createContext("/", ex -> respond(ex, """
+        server.createContext("/", ex -> {
+            if (ex.getRequestURI().getPath().contains("/slow")) {
+                sleep(1_500); // slower than Spring Cloud's default 1 s time limiter
+            }
+            respond(ex, """
                 {"path": "%s", "user": %s, "request_id": "%s"}"""
                 .formatted(ex.getRequestURI().getPath(),
                         quoteOrNull(ex.getRequestHeaders().getFirst("X-User-ID")),
-                        ex.getRequestHeaders().getFirst("X-Request-ID"))));
+                        ex.getRequestHeaders().getFirst("X-Request-ID")));
+        });
+        server.setExecutor(java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor());
         server.start();
     }
 
@@ -75,6 +81,14 @@ final class FakeServices {
             return jwt.serialize();
         } catch (JOSEException e) {
             throw new IllegalStateException(e);
+        }
+    }
+
+    private static void sleep(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 

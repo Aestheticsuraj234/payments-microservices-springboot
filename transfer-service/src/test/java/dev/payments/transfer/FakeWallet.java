@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -33,6 +34,10 @@ public final class FakeWallet {
     private final Map<String, Deque<String>> scripts = new ConcurrentHashMap<>();
     /** Every call, like "hold 3f2c..." or "capture 3f2c... -> 9a1b...". */
     public final List<String> calls = new CopyOnWriteArrayList<>();
+    /** How many wallet lookups reached us. */
+    public final AtomicInteger lookups = new AtomicInteger();
+    /** While true, every wallet lookup answers 503: an outage. */
+    public volatile boolean lookupsDown;
 
     public FakeWallet() {
         try {
@@ -71,8 +76,11 @@ public final class FakeWallet {
         String[] path = ex.getRequestURI().getPath().split("/"); // "", internal, wallets|holds, id, [action]
         String body = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
         if (path[2].equals("wallets")) {
+            lookups.incrementAndGet();
             Wallet w = wallets.get(UUID.fromString(path[3]));
-            if (w == null) {
+            if (lookupsDown) {
+                respond(ex, "503:unavailable", "{}");
+            } else if (w == null) {
                 respond(ex, "404:not_found", "{}");
             } else {
                 respond(ex, "200", """
