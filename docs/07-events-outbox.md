@@ -234,4 +234,4 @@ through these events, so one trace spans the HTTP request and the email it cause
    election, or batches per partition key).
 3. Add a `wallet.deposit.completed.v2` that also carries the new balance, and publish both versions.
 
-**Next:** Chapter 8 — The transfer service and sagas
+**Next:** [Chapter 8 — The transfer service and sagas](08-transfer-saga.md)

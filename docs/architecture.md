@@ -2,10 +2,11 @@
 
 > This page describes the code on the branch you are reading. Every chapter updates it.
 
-## After chapter 7
+## After chapter 8
 
-Clients talk only to the gateway. It verifies tokens, limits rates, and routes to two services, each
-with its own database. The wallet publishes events to Kafka through a transactional outbox.
+Clients talk only to the gateway. It verifies tokens, limits rates, and routes to three services, each
+with its own database. Transfers run as sagas: the transfer service orchestrates holds in the wallet
+over its internal HTTP API. The wallet publishes events to Kafka through a transactional outbox.
 
 ```mermaid
 flowchart LR
@@ -16,7 +17,10 @@ flowchart LR
         sec --> rl[Rate limit] --> idf[IdentityFilter<br/>X-User-ID]
     end
     gw -->|/v1/auth/**| auth[auth-service :8082]
-    gw -->|/v1/wallets/**, /v1/transfers| wallet[wallet-service :8081]
+    gw -->|/v1/wallets/**| wallet[wallet-service :8081]
+    gw -->|/v1/transfers| transfer[transfer-service :8083]
+    transfer -->|/internal: hold, capture, release| wallet
+    transfer --- tdb[(PostgreSQL: transfer)]
     gw -. JWKS, cached .-> auth
     gw --- redis[(Redis)]
     auth --- adb[(PostgreSQL: auth)]
@@ -28,7 +32,8 @@ Inside wallet-service:
 
 ```mermaid
 flowchart LR
-    f[RequestIdFilter] --> c[WalletController<br/>TransferController<br/>+ Caller from X-User-ID]
+    f[RequestIdFilter] --> c[WalletController<br/>+ Caller from X-User-ID]
+    ic[InternalController<br/>/internal] --> hs[HoldService] --> r
     c --> i[IdempotentRequests<br/>IdempotencyStore]
     i --> s[WalletService<br/>ownership rules]
     s --> rt[RetryingTransactions]
@@ -45,7 +50,8 @@ flowchart LR
 | `gateway` | 8080 | The only public entry point: JWT verification, `X-User-ID`, Redis rate limits, CORS, routing |
 | `wallet-service` | 8081 | Wallets, deposits, balances, entries, transfers: the double-entry ledger |
 | `auth-service` | 8082 | Users, argon2id passwords, RS256 access tokens, rotating refresh tokens, JWKS |
-| PostgreSQL 17 | 5433 (host) | One database per service: `wallet`, `auth` |
+| `transfer-service` | 8083 | Transfers between users as orchestrated sagas over wallet holds |
+| PostgreSQL 17 | 5433 (host) | One database per service: `wallet`, `auth`, `transfer` |
 | Redis 7 | 6379 | Gateway rate-limit buckets |
 | Kafka 4.2 (KRaft) | 9092 | Events; topic auto-creation off |
 
@@ -55,7 +61,9 @@ flowchart LR
 |---|---|---|
 | `/v1/auth/register`, `/login`, `/refresh`, `/logout` | auth-service | not needed |
 | `/v1/auth/me` | auth-service | required |
-| `/v1/wallets/**`, `/v1/transfers` | wallet-service | required |
+| `/v1/wallets/**` | wallet-service | required |
+| `/v1/transfers/**` | transfer-service | required |
+| `/internal/**` | — (no route: 404) | — |
 
 Every request: `X-Request-ID` set or kept; any client `X-User-ID` removed, then set from the token's
 `sub`; token bucket per user (or IP): 10/s, burst 20; 5 s response timeout.
@@ -92,7 +100,33 @@ their owner (others get 404). A transfer's `from` must be the caller's wallet; `
 | `GET` | `/v1/wallets/{id}/balance` | Derived from entries |
 | `POST` | `/v1/wallets/{id}/deposits` | Debits settlement, credits the wallet; needs `Idempotency-Key` |
 | `GET` | `/v1/wallets/{id}/entries` | Newest first; `limit` (1–100, default 20) and opaque `cursor` |
-| `POST` | `/v1/transfers` | `{"from", "to", "amount", "currency"}`; same currency; `insufficient_funds` (422); needs `Idempotency-Key` |
+
+### wallet-service internal API (no gateway route; called by transfer-service)
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/internal/wallets/{id}` | `{id, owner_id, currency}` |
+| `PUT` | `/internal/holds/{id}` | `{wallet_id, owner_id, amount, currency}`; idempotent by hold id; `insufficient_funds` |
+| `POST` | `/internal/holds/{id}/capture` | `{to_wallet_id}`; idempotent; `hold_settled`, `currency_mismatch`; emits `transfer.completed` |
+| `POST` | `/internal/holds/{id}/release` | idempotent; `hold_settled` if captured |
+
+### transfer-service API
+
+| Method | Path | Notes |
+|---|---|---|
+| `POST` | `/v1/transfers` | `{"from", "to", "amount", "currency"}` + `Idempotency-Key`; validates wallets; `202 Accepted` + `Location`; 503 if the wallet is unreachable |
+| `GET` | `/v1/transfers/{id}` | Sender only; `state`, `failure_reason`, `steps` |
+
+Saga: `pending →(hold) funds_held →(capture) completed`; refused hold ⇒ `failed`; refused capture ⇒
+`compensating →(release, retried forever) reversed`. 4xx = refusal, 5xx/timeout = retry with
+exponential backoff and jitter. Claims are 10 s leases; writes are guarded by `version`.
+
+### transfer database
+
+| Table | Purpose |
+|---|---|
+| `transfers` | One row per saga: state, failure reason, attempts, next attempt, version; `UNIQUE (user_id, idempotency_key)` |
+| `transfer_steps` | Every try of every step |
 
 ### Idempotency
 
@@ -103,7 +137,7 @@ bytes back with `Idempotent-Replayed: true`. Errors: `idempotency_key_required` 
 
 ### Concurrency rules
 
-- A transfer locks both wallets (`SELECT ... FOR UPDATE`), **lower UUID first**, then checks the balance.
+- Placing a hold locks the wallet (`SELECT ... FOR UPDATE`), then checks the balance. Settling a hold locks the hold.
 - Transactions that hit a deadlock or serialization failure are retried whole, up to 5 attempts,
   with exponential backoff and jitter (`RetryingTransactions`, READ COMMITTED). Only the outermost
   transaction retries; nested calls join it.
@@ -112,12 +146,13 @@ bytes back with `Idempotent-Replayed: true`. Errors: `idempotency_key_required` 
 
 | Table / view | Purpose |
 |---|---|
-| `accounts` | Wallets (`kind = wallet`, have an owner) and system accounts (`settlement` per currency) |
+| `accounts` | Wallets (`kind = wallet`, have an owner) and system accounts (`settlement` and `holds` per currency) |
 | `transactions` | The journal: one row per movement of money |
 | `entries` | Debits and credits; append-only; balanced per transaction at commit |
 | `account_balances` (view) | Balances derived from entries |
 | `idempotency_keys` | One row per key: fingerprint, status, the stored response |
 | `outbox` | Events written with the change they describe; `published_at` set by the relay |
+| `holds` | Money set aside for a transfer saga: `held`, `captured` or `released` |
 
 ### wallet events (topic `wallet.events`, 3 partitions, key = wallet id)
 
@@ -128,7 +163,7 @@ Delivery is at least once: consumers deduplicate by `id`.
 |---|---|
 | `wallet.wallet.created.v1` | `wallet {id, owner_id, currency}` |
 | `wallet.deposit.completed.v1` | `transaction_id`, `wallet`, `amount` |
-| `wallet.transfer.completed.v1` | `transaction_id`, `from`, `to`, `amount` (keyed by `from`) |
+| `wallet.transfer.completed.v1` | `transaction_id`, `from`, `to`, `amount` (keyed by `from`); emitted when a hold is captured |
 
 ### Cross-cutting conventions (every service follows them)
 
@@ -147,6 +182,10 @@ Delivery is at least once: consumers deduplicate by `id`.
 gateway: `dev.payments.gateway` — `GatewayApplication`, `GatewayProperties`, `SecurityConfig`,
 `ProblemEntryPoint`, `RequestIdFilter`, `IdentityFilter`, `RateLimitConfig`; routes in `application.yml`.
 
+transfer-service: `dev.payments.transfer` — `TransferApplication`, `TransferProperties`, `error`, `web`,
+`saga` (`State`, `Saga`, `StepOutcome`, `Transfer`, `TransferRepository`, `SagaOrchestrator`,
+`TransferService`, `TransferController`), `wallet` (`WalletClient`, `WalletClientConfig`, `WalletSteps`).
+
 auth-service: `dev.payments.auth` — `AuthApplication`, `AuthProperties`, `error`, `web`
 (incl. `ProblemAuthenticationEntryPoint`), `security` (`SecurityConfig`), `token` (`SigningKeyConfig`,
 `AccessTokens`, `JwksController`), `user` (`AuthService`, `AuthController`, repositories).
@@ -160,8 +199,9 @@ dev.payments.wallet
 ├── error      PaymentsException hierarchy (incl. Idempotency-, UnauthenticatedException), FieldErrors
 ├── events     WalletEvents (the contract), Outbox, OutboxRelay, OutboxProperties, KafkaTopicConfig
 ├── idempotency IdempotencyKey, IdempotencyStore, IdempotentRequests, IdempotencyCleanup
-├── ledger     Account, Entry, Transaction, Transfer, Posting, LedgerRepository, WalletService,
-│              RetryingTransactions, WalletController, TransferController, Cursor
+├── holds      Hold, HoldRepository, HoldService, InternalController
+├── ledger     Account, Entry, Transaction, Posting, LedgerRepository, WalletService,
+│              RetryingTransactions, WalletController, Cursor
 ├── money      Money, MoneyRules
 └── web        ApiExceptionHandler, RequestIdFilter, Caller, CallerArgumentResolver, WebConfig
 ```

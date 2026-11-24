@@ -48,6 +48,7 @@ class GatewayIT {
     static void properties(DynamicPropertyRegistry registry) {
         registry.add("gateway.services.auth", services::url);
         registry.add("gateway.services.wallet", services::url);
+        registry.add("gateway.services.transfer", services::url);
         // A small budget, so the rate limit test doesn't need hundreds of requests.
         registry.add("gateway.rate-limit.replenish-rate", () -> 1);
         registry.add("gateway.rate-limit.burst-capacity", () -> 3);
@@ -88,6 +89,23 @@ class GatewayIT {
                 .expectBody()
                 .jsonPath("$.path").isEqualTo("/v1/wallets/123/balance")
                 .jsonPath("$.user").isEqualTo(user.toString());
+    }
+
+    @Test
+    void routesTransfersToTheTransferService() {
+        client.post().uri("/v1/transfers")
+                .header("Authorization", "Bearer " + services.token(UUID.randomUUID()))
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody().jsonPath("$.path").isEqualTo("/v1/transfers");
+    }
+
+    @Test
+    void internalEndpointsAreNotReachableFromOutside() {
+        client.get().uri("/internal/wallets/" + UUID.randomUUID())
+                .header("Authorization", "Bearer " + services.token(UUID.randomUUID()))
+                .exchange()
+                .expectStatus().isNotFound();
     }
 
     @Test
