@@ -235,4 +235,4 @@ benefit: it hides the internal layout.
    and what do you gain?
 4. Stop the auth service after the gateway has fetched the JWKS once. Do requests still work? Why?
 
-**Next:** Chapter 7 — Events and the outbox
+**Next:** [Chapter 7 — Events and the outbox](07-events-outbox.md)
