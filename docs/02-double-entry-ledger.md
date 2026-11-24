@@ -349,4 +349,4 @@ brings concurrency: two transfers from the same wallet at the same moment.
 3. Add `GET /v1/wallets?owner_id=...` listing an owner's wallets (the index already exists).
 4. Write a test that posts a transaction with **no** entries and check the error message.
 
-**Next:** Chapter 3 — Moving money safely
+**Next:** [Chapter 3 — Moving money safely](03-safe-transfers.md)

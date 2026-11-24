@@ -79,6 +79,19 @@ public class LedgerRepository {
                 .optional();
     }
 
+    /**
+     * Locks an account's row until the end of the transaction. Anyone else who
+     * locks it waits here until we commit or roll back. Must run inside a
+     * transaction, or the lock is released as soon as the statement ends.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void lock(UUID accountId) {
+        jdbc.sql("SELECT id FROM accounts WHERE id = :id FOR UPDATE")
+                .param("id", accountId)
+                .query(UUID.class)
+                .single();
+    }
+
     /** An account's balance, summed from its entries by the {@code account_balances} view. */
     public long balance(UUID accountId) {
         return jdbc.sql("SELECT balance FROM account_balances WHERE account_id = :id")
