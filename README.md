@@ -13,7 +13,7 @@ Spring way, explaining every decision along the way.
 | # | Chapter | Branch | What you build | Status |
 |---|---------|--------|----------------|--------|
 | 00 | [Course setup](docs/00-course-setup.md) | `ch00-course-setup` | The Go reference, the roadmap, the workflow | ✅ |
-| 01 | Spring Boot foundations | `ch01-spring-boot-foundations` | Maven multi-module build, wallet-service skeleton, config, errors, logging | planned |
+| 01 | [Spring Boot foundations](docs/01-spring-boot-foundations.md) | `ch01-spring-boot-foundations` | Maven multi-module build, wallet-service skeleton, config, errors, logging | ✅ |
 | 02 | The double-entry ledger | `ch02-double-entry-ledger` | Flyway, `JdbcClient`, wallets, deposits, balances, pagination, Testcontainers | planned |
 | 03 | Moving money safely | `ch03-safe-transfers` | Row locks, lock ordering, retries, concurrency tests | planned |
 | 04 | Idempotency keys | `ch04-idempotency` | Exactly-once money movement over an unreliable network | planned |
@@ -30,7 +30,14 @@ Spring way, explaining every decision along the way.
 
 - Java 21
 - Docker (for PostgreSQL, Redis, Kafka and the integration tests)
-- Maven is optional: the project ships a Maven wrapper from chapter 1
+- Maven is optional: the project ships a Maven wrapper
+
+## Build and test
+
+```bash
+./mvnw verify          # every module: unit tests, then integration tests
+./mvnw -pl wallet-service spring-boot:run
+```
 
 ## License
 
