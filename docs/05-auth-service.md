@@ -232,4 +232,4 @@ auth for a user's email — through its API, never its database.
 4. Rate-limit `/v1/auth/login` per email. (Chapter 6 adds rate limiting at the gateway; think about
    why per-email limits belong here instead.)
 
-**Next:** Chapter 6 — The API gateway
+**Next:** [Chapter 6 — The API gateway](06-api-gateway.md)

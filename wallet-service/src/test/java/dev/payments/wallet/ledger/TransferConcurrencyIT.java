@@ -30,7 +30,7 @@ class TransferConcurrencyIT {
     private Account funded(long amount) {
         Account wallet = wallets.createWallet(UUID.randomUUID(), "USD");
         if (amount > 0) {
-            wallets.deposit(wallet.id(), new Money(amount, "USD"));
+            wallets.deposit(wallet.ownerId(), wallet.id(), new Money(amount, "USD"));
         }
         return wallet;
     }
@@ -66,7 +66,7 @@ class TransferConcurrencyIT {
         // 30 transfers of 100 from a wallet that holds 1,000.
         List<Callable<?>> tasks = new ArrayList<>();
         for (int i = 0; i < 30; i++) {
-            tasks.add(() -> wallets.transfer(from.id().toString(), to.id().toString(), new Money(100, "USD")));
+            tasks.add(() -> wallets.transfer(from.ownerId(), from.id().toString(), to.id().toString(), new Money(100, "USD")));
         }
         List<Future<?>> results = runTogether(tasks);
 
@@ -79,8 +79,8 @@ class TransferConcurrencyIT {
 
         assertThat(succeeded).isEqualTo(10);
         assertThat(refused).isEqualTo(20);
-        assertThat(wallets.balance(from.id()).amount()).isZero();
-        assertThat(wallets.balance(to.id()).amount()).isEqualTo(1_000);
+        assertThat(wallets.balance(from.ownerId(), from.id()).amount()).isZero();
+        assertThat(wallets.balance(to.ownerId(), to.id()).amount()).isEqualTo(1_000);
     }
 
     @Test
@@ -92,13 +92,13 @@ class TransferConcurrencyIT {
         // ordering, "A locks a, B locks b, each waits for the other" deadlocks.
         List<Callable<?>> tasks = new ArrayList<>();
         for (int i = 0; i < 25; i++) {
-            tasks.add(() -> wallets.transfer(a.id().toString(), b.id().toString(), new Money(7, "USD")));
-            tasks.add(() -> wallets.transfer(b.id().toString(), a.id().toString(), new Money(7, "USD")));
+            tasks.add(() -> wallets.transfer(a.ownerId(), a.id().toString(), b.id().toString(), new Money(7, "USD")));
+            tasks.add(() -> wallets.transfer(b.ownerId(), b.id().toString(), a.id().toString(), new Money(7, "USD")));
         }
         List<Future<?>> results = runTogether(tasks);
 
         assertThat(results).allMatch(f -> f.state() == Future.State.SUCCESS);
-        assertThat(wallets.balance(a.id()).amount()).isEqualTo(10_000);
-        assertThat(wallets.balance(b.id()).amount()).isEqualTo(10_000);
+        assertThat(wallets.balance(a.ownerId(), a.id()).amount()).isEqualTo(10_000);
+        assertThat(wallets.balance(b.ownerId(), b.id()).amount()).isEqualTo(10_000);
     }
 }

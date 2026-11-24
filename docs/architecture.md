@@ -2,44 +2,58 @@
 
 > This page describes the code on the branch you are reading. Every chapter updates it.
 
-## After chapter 5
+## After chapter 6
 
-Two independent services, each with its own database. They don't call each other yet.
+Clients talk only to the gateway. It verifies tokens, limits rates, and routes to two services, each
+with its own database.
 
 ```mermaid
 flowchart LR
-    client([Client]) -->|HTTP :8082| auth
-    subgraph auth[auth-service]
+    client([Client]) -->|HTTPS :8080| gw
+    subgraph gw[gateway]
         direction TB
-        sec[Spring Security<br/>JWT resource server] --> ac[AuthController]
-        ac --> as[AuthService] --> at[AccessTokens RS256]
-        jw[JwksController]
+        rid[RequestIdFilter] --> sec[JWT check<br/>via JWKS]
+        sec --> rl[Rate limit] --> idf[IdentityFilter<br/>X-User-ID]
     end
-    as --> adb[(PostgreSQL: auth)]
+    gw -->|/v1/auth/**| auth[auth-service :8082]
+    gw -->|/v1/wallets/**, /v1/transfers| wallet[wallet-service :8081]
+    gw -. JWKS, cached .-> auth
+    gw --- redis[(Redis)]
+    auth --- adb[(PostgreSQL: auth)]
+    wallet --- wdb[(PostgreSQL: wallet)]
 ```
 
+Inside wallet-service:
+
 ```mermaid
 flowchart LR
-    client([Client]) -->|HTTP :8081| wallet
-    subgraph wallet[wallet-service]
-        direction TB
-        f[RequestIdFilter] --> c[WalletController<br/>TransferController]
-        c --> i[IdempotentRequests<br/>IdempotencyStore]
-        i --> s[WalletService]
-        s --> rt[RetryingTransactions]
-        s --> r[LedgerRepository]
-        c -. exceptions .-> h[ApiExceptionHandler]
-    end
-    r --> db[(PostgreSQL: wallet)]
+    f[RequestIdFilter] --> c[WalletController<br/>TransferController<br/>+ Caller from X-User-ID]
+    c --> i[IdempotentRequests<br/>IdempotencyStore]
+    i --> s[WalletService<br/>ownership rules]
+    s --> rt[RetryingTransactions]
+    s --> r[LedgerRepository] --> db[(wallet DB)]
 ```
 
 ### Services and infrastructure
 
 | Component | Port | Description |
 |---|---|---|
+| `gateway` | 8080 | The only public entry point: JWT verification, `X-User-ID`, Redis rate limits, CORS, routing |
 | `wallet-service` | 8081 | Wallets, deposits, balances, entries, transfers: the double-entry ledger |
 | `auth-service` | 8082 | Users, argon2id passwords, RS256 access tokens, rotating refresh tokens, JWKS |
 | PostgreSQL 17 | 5433 (host) | One database per service: `wallet`, `auth` |
+| Redis 7 | 6379 | Gateway rate-limit buckets |
+
+### gateway routes
+
+| Path | Service | Token |
+|---|---|---|
+| `/v1/auth/register`, `/login`, `/refresh`, `/logout` | auth-service | not needed |
+| `/v1/auth/me` | auth-service | required |
+| `/v1/wallets/**`, `/v1/transfers` | wallet-service | required |
+
+Every request: `X-Request-ID` set or kept; any client `X-User-ID` removed, then set from the token's
+`sub`; token bucket per user (or IP): 10/s, burst 20; 5 s response timeout.
 
 ### auth-service API
 
@@ -63,12 +77,12 @@ Access token claims: `iss=payments-auth`, `aud=[payments]`, `sub=<user id>`, `ia
 
 ### wallet-service API
 
-`owner_id` still comes from the request body; chapter 6 takes it from the verified token instead.
-
+Every request needs `X-User-ID` (set by the gateway; missing ⇒ 401). Wallets are visible only to
+their owner (others get 404). A transfer's `from` must be the caller's wallet; `to` may be anyone's.
 
 | Method | Path | Notes |
 |---|---|---|
-| `POST` | `/v1/wallets` | `{"owner_id", "currency"}`; one wallet per owner and currency |
+| `POST` | `/v1/wallets` | `{"currency"}`; the owner is the caller; one wallet per owner and currency |
 | `GET` | `/v1/wallets/{id}` | System accounts are invisible (404) |
 | `GET` | `/v1/wallets/{id}/balance` | Derived from entries |
 | `POST` | `/v1/wallets/{id}/deposits` | Debits settlement, credits the wallet; needs `Idempotency-Key` |
@@ -77,7 +91,7 @@ Access token claims: `iss=payments-auth`, `aud=[payments]`, `sub=<user id>`, `ia
 
 ### Idempotency
 
-Every request that moves money needs an `Idempotency-Key` header (1–255 chars). The first request
+Every request that moves money needs an `Idempotency-Key` header (1–255 chars), unique per user. The first request
 runs; the response is stored **in the same transaction** as the ledger entries; retries get the same
 bytes back with `Idempotent-Replayed: true`. Errors: `idempotency_key_required` (400),
 `idempotency_key_reused` (422), `request_in_progress` (409). Keys live 24 h; claims expire after 1 min.
@@ -107,9 +121,13 @@ bytes back with `Idempotent-Replayed: true`. Errors: `idempotency_key_required` 
 - **Logs:** every line carries `[service-name,request-id]`.
 - **Health:** `/actuator/health/liveness` and `/actuator/health/readiness`.
 - **Data:** Flyway migrations, `JdbcClient` SQL, invariants enforced in the database.
-- **Tests:** `*Test` run in `mvn test`; `*IT` (full application, PostgreSQL via Testcontainers) in `mvn verify`.
+- **Identity:** the gateway authenticates; services read `X-User-ID` and authorize.
+- **Tests:** `*Test` run in `mvn test`; `*IT` (full application, real containers) in `mvn verify`.
 
 ### Package layout
+
+gateway: `dev.payments.gateway` — `GatewayApplication`, `GatewayProperties`, `SecurityConfig`,
+`ProblemEntryPoint`, `RequestIdFilter`, `IdentityFilter`, `RateLimitConfig`; routes in `application.yml`.
 
 auth-service: `dev.payments.auth` — `AuthApplication`, `AuthProperties`, `error`, `web`
 (incl. `ProblemAuthenticationEntryPoint`), `security` (`SecurityConfig`), `token` (`SigningKeyConfig`,
@@ -121,10 +139,10 @@ wallet-service:
 dev.payments.wallet
 ├── WalletApplication
 ├── config     WalletProperties
-├── error      PaymentsException hierarchy (incl. IdempotencyException), FieldErrors
+├── error      PaymentsException hierarchy (incl. Idempotency-, UnauthenticatedException), FieldErrors
 ├── idempotency IdempotencyKey, IdempotencyStore, IdempotentRequests, IdempotencyCleanup
 ├── ledger     Account, Entry, Transaction, Transfer, Posting, LedgerRepository, WalletService,
 │              RetryingTransactions, WalletController, TransferController, Cursor
 ├── money      Money, MoneyRules
-└── web        ApiExceptionHandler, RequestIdFilter
+└── web        ApiExceptionHandler, RequestIdFilter, Caller, CallerArgumentResolver, WebConfig
 ```

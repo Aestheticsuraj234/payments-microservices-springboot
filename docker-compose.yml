@@ -22,5 +22,17 @@ services:
       timeout: 3s
       retries: 20
 
+  # The gateway's rate limit counters, shared by every gateway instance.
+  redis:
+    image: redis:7-alpine
+    container_name: payments-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
 volumes:
   pgdata:

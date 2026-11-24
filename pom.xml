@@ -24,13 +24,29 @@
         <java.version>21</java.version>
         <!-- Not managed by Spring Boot: Spring Security's Argon2 encoder needs it. -->
         <bouncycastle.version>1.86</bouncycastle.version>
+        <!-- The Spring Cloud release train that matches Spring Boot 4.2. -->
+        <spring-cloud.version>2026.0.0</spring-cloud.version>
     </properties>
 
     <!-- One module per service. Each builds into its own runnable jar. -->
     <modules>
         <module>wallet-service</module>
         <module>auth-service</module>
+        <module>gateway</module>
     </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Versions for Spring Cloud projects (Gateway, later Circuit Breaker). -->
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <build>
         <plugins>

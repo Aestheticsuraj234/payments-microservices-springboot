@@ -2,6 +2,7 @@ package dev.payments.wallet.ledger;
 
 import dev.payments.wallet.idempotency.IdempotentRequests;
 import dev.payments.wallet.money.Money;
+import dev.payments.wallet.web.Caller;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import java.util.UUID;
@@ -35,8 +36,8 @@ public class TransferController {
 
     /** Moves money, so it runs once per {@code Idempotency-Key}. */
     @PostMapping("/v1/transfers")
-    ResponseEntity<byte[]> transfer(@RequestBody TransferRequest body, HttpServletRequest request) {
-        return idempotent.run(request, body, HttpStatus.CREATED, () -> TransferResponse.of(wallets.transfer(
-                body.from(), body.to(), new Money(body.amount(), body.currency()))));
+    ResponseEntity<byte[]> transfer(Caller caller, @RequestBody TransferRequest body, HttpServletRequest request) {
+        return idempotent.run(caller, request, body, HttpStatus.CREATED, () -> TransferResponse.of(wallets.transfer(
+                caller.userId(), body.from(), body.to(), new Money(body.amount(), body.currency()))));
     }
 }

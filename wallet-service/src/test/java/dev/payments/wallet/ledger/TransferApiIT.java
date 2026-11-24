@@ -22,9 +22,10 @@ class TransferApiIT {
     void movesMoneyAndReportsInsufficientFunds() {
         Account alice = wallets.createWallet(UUID.randomUUID(), "EUR");
         Account bob = wallets.createWallet(UUID.randomUUID(), "EUR");
-        wallets.deposit(alice.id(), new Money(500, "EUR"));
+        wallets.deposit(alice.ownerId(), alice.id(), new Money(500, "EUR"));
 
         client.post().uri("/v1/transfers")
+                .header("X-User-ID", alice.ownerId().toString())
                 .header("Idempotency-Key", UUID.randomUUID().toString())
                 .body(Map.of("from", alice.id().toString(), "to", bob.id().toString(), "amount", 300, "currency", "EUR"))
                 .exchange()
@@ -35,6 +36,7 @@ class TransferApiIT {
                 .jsonPath("$.amount.amount").isEqualTo(300);
 
         client.post().uri("/v1/transfers")
+                .header("X-User-ID", alice.ownerId().toString())
                 .header("Idempotency-Key", UUID.randomUUID().toString())
                 .body(Map.of("from", alice.id().toString(), "to", bob.id().toString(), "amount", 300, "currency", "EUR"))
                 .exchange()
@@ -42,6 +44,7 @@ class TransferApiIT {
                 .expectBody().jsonPath("$.code").isEqualTo("insufficient_funds");
 
         client.get().uri("/v1/wallets/{id}/balance", bob.id())
+                .header("X-User-ID", bob.ownerId().toString())
                 .exchange()
                 .expectBody().jsonPath("$.balance.amount").isEqualTo(300);
     }

@@ -71,7 +71,7 @@ class LedgerInvariantsIT {
     @Test
     void theLedgerIsAppendOnly() {
         Account wallet = wallets.createWallet(UUID.randomUUID(), "USD");
-        wallets.deposit(wallet.id(), new Money(100, "USD"));
+        wallets.deposit(wallet.ownerId(), wallet.id(), new Money(100, "USD"));
 
         assertThatThrownBy(() -> jdbc.sql("UPDATE entries SET amount = 1000000 WHERE account_id = :id")
                 .param("id", wallet.id()).update())
@@ -85,7 +85,7 @@ class LedgerInvariantsIT {
     @Test
     void theBooksAlwaysBalance() {
         Account wallet = wallets.createWallet(UUID.randomUUID(), "EUR");
-        wallets.deposit(wallet.id(), new Money(700, "EUR"));
+        wallets.deposit(wallet.ownerId(), wallet.id(), new Money(700, "EUR"));
 
         // Across the whole ledger, debits equal credits in every currency.
         List<Long> imbalances = jdbc.sql("""

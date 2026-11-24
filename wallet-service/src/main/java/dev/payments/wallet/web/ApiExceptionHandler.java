@@ -5,6 +5,7 @@ import dev.payments.wallet.error.IdempotencyException;
 import dev.payments.wallet.error.NotFoundException;
 import dev.payments.wallet.error.PaymentsException;
 import dev.payments.wallet.error.RuleViolationException;
+import dev.payments.wallet.error.UnauthenticatedException;
 import dev.payments.wallet.error.ValidationException;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -64,6 +65,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                 yield p;
             }
             case RuleViolationException e -> problem(HttpStatus.UNPROCESSABLE_CONTENT, e.code(), e.getMessage());
+            case UnauthenticatedException e -> problem(HttpStatus.UNAUTHORIZED, "unauthenticated", e.getMessage());
             case IdempotencyException e -> problem(switch (e.reason()) {
                 case KEY_REQUIRED -> HttpStatus.BAD_REQUEST;
                 case KEY_REUSED -> HttpStatus.UNPROCESSABLE_CONTENT;

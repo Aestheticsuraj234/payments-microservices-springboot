@@ -11,7 +11,7 @@ package dev.payments.wallet.error;
  */
 public sealed abstract class PaymentsException extends RuntimeException
         permits NotFoundException, ConflictException, ValidationException, RuleViolationException,
-        IdempotencyException {
+        IdempotencyException, UnauthenticatedException {
 
     protected PaymentsException(String message) {
         super(message);

@@ -1,10 +1,10 @@
 package dev.payments.wallet.ledger;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import dev.payments.wallet.error.FieldErrors;
 import dev.payments.wallet.error.NotFoundException;
 import dev.payments.wallet.idempotency.IdempotentRequests;
 import dev.payments.wallet.money.Money;
+import dev.payments.wallet.web.Caller;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.time.Instant;
@@ -33,7 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/wallets")
 public class WalletController {
 
-    record CreateWalletRequest(@Nullable String ownerId, @Nullable String currency) {
+    record CreateWalletRequest(@Nullable String currency) {
     }
 
     record WalletResponse(UUID id, UUID ownerId, String currency, Instant createdAt) {
@@ -68,46 +68,43 @@ public class WalletController {
         this.idempotent = idempotent;
     }
 
+    /** Opens a wallet for the caller: the owner comes from the token, never from the body. */
     @PostMapping
-    ResponseEntity<WalletResponse> create(@RequestBody CreateWalletRequest request) {
-        UUID ownerId = null;
-        try {
-            ownerId = request.ownerId() == null ? null : UUID.fromString(request.ownerId());
-        } catch (IllegalArgumentException e) {
-            new FieldErrors().add("owner_id", "must be a UUID").throwIfAny();
-        }
-        Account wallet = wallets.createWallet(ownerId, request.currency());
+    ResponseEntity<WalletResponse> create(Caller caller, @RequestBody CreateWalletRequest request) {
+        Account wallet = wallets.createWallet(caller.userId(), request.currency());
         return ResponseEntity.created(URI.create("/v1/wallets/" + wallet.id()))
                 .body(WalletResponse.of(wallet));
     }
 
     @GetMapping("/{id}")
-    WalletResponse get(@PathVariable String id) {
-        return WalletResponse.of(wallets.wallet(walletId(id)));
+    WalletResponse get(Caller caller, @PathVariable String id) {
+        return WalletResponse.of(wallets.wallet(caller.userId(), walletId(id)));
     }
 
     @GetMapping("/{id}/balance")
-    BalanceResponse balance(@PathVariable String id) {
+    BalanceResponse balance(Caller caller, @PathVariable String id) {
         UUID walletId = walletId(id);
-        return new BalanceResponse(walletId, wallets.balance(walletId));
+        return new BalanceResponse(walletId, wallets.balance(caller.userId(), walletId));
     }
 
     /** Moves money, so it runs once per {@code Idempotency-Key}: a retry gets the first response back. */
     @PostMapping("/{id}/deposits")
-    ResponseEntity<byte[]> deposit(@PathVariable String id, @RequestBody Money amount, HttpServletRequest request) {
+    ResponseEntity<byte[]> deposit(Caller caller, @PathVariable String id, @RequestBody Money amount,
+            HttpServletRequest request) {
         UUID walletId = walletId(id);
-        return idempotent.run(request, amount, HttpStatus.CREATED, () -> {
-            Transaction tx = wallets.deposit(walletId, amount);
+        return idempotent.run(caller, request, amount, HttpStatus.CREATED, () -> {
+            Transaction tx = wallets.deposit(caller.userId(), walletId, amount);
             return new DepositResponse(tx.id(), walletId, amount, tx.createdAt());
         });
     }
 
     @GetMapping("/{id}/entries")
     EntriesResponse entries(
+            Caller caller,
             @PathVariable String id,
             @RequestParam(required = false) String cursor,
             @RequestParam(required = false) Integer limit) {
-        EntryPage page = wallets.entries(walletId(id), cursor, limit);
+        EntryPage page = wallets.entries(caller.userId(), walletId(id), cursor, limit);
         return new EntriesResponse(page.entries().stream().map(EntryResponse::of).toList(), page.nextCursor());
     }
 
