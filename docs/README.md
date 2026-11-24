@@ -6,6 +6,7 @@ Read the chapters in order: each one builds on the previous ones, and says so at
 |---|---------|
 | 00 | [Course setup](00-course-setup.md) |
 | 01 | [Spring Boot foundations](01-spring-boot-foundations.md) |
+| 02 | [The double-entry ledger](02-double-entry-ledger.md) |
 
 Living documents, updated by every chapter:
 

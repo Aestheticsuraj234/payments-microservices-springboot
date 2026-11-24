@@ -1,0 +1,26 @@
+# Local infrastructure for running the services from source.
+#   docker compose up -d
+# Every chapter adds what it needs.
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: payments-postgres
+    environment:
+      POSTGRES_USER: payments
+      POSTGRES_PASSWORD: payments
+      POSTGRES_DB: payments
+    ports:
+      # 5433 on the host, so a Postgres you already run on 5432 does not clash.
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Runs once, when the data volume is first created: one database per service.
+      - ./deploy/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U payments"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  pgdata:

@@ -14,7 +14,7 @@ Spring way, explaining every decision along the way.
 |---|---------|--------|----------------|--------|
 | 00 | [Course setup](docs/00-course-setup.md) | `ch00-course-setup` | The Go reference, the roadmap, the workflow | ✅ |
 | 01 | [Spring Boot foundations](docs/01-spring-boot-foundations.md) | `ch01-spring-boot-foundations` | Maven multi-module build, wallet-service skeleton, config, errors, logging | ✅ |
-| 02 | The double-entry ledger | `ch02-double-entry-ledger` | Flyway, `JdbcClient`, wallets, deposits, balances, pagination, Testcontainers | planned |
+| 02 | [The double-entry ledger](docs/02-double-entry-ledger.md) | `ch02-double-entry-ledger` | Flyway, `JdbcClient`, wallets, deposits, balances, pagination, Testcontainers | ✅ |
 | 03 | Moving money safely | `ch03-safe-transfers` | Row locks, lock ordering, retries, concurrency tests | planned |
 | 04 | Idempotency keys | `ch04-idempotency` | Exactly-once money movement over an unreliable network | planned |
 | 05 | The auth service | `ch05-auth-service` | A second service, database per service, Argon2, JWT, refresh tokens | planned |
@@ -35,9 +35,12 @@ Spring way, explaining every decision along the way.
 ## Build and test
 
 ```bash
-./mvnw verify          # every module: unit tests, then integration tests
+./mvnw verify                      # every module: unit tests, then integration tests (needs Docker)
+docker compose up -d --wait        # local infrastructure (PostgreSQL on port 5433)
 ./mvnw -pl wallet-service spring-boot:run
 ```
+
+Example requests are in [`api/`](api).
 
 ## License
 

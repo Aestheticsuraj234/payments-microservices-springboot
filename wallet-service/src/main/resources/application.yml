@@ -4,6 +4,12 @@ spring:
   jackson:
     # Our JSON API speaks snake_case (created_at, owner_id), like the Go reference.
     property-naming-strategy: SNAKE_CASE
+  datasource:
+    # Matches docker-compose.yml. Override with SPRING_DATASOURCE_* environment variables.
+    url: jdbc:postgresql://localhost:5433/wallet
+    username: payments
+    password: payments
+  # Flyway runs src/main/resources/db/migration/V*.sql at startup, in order, once each.
 
 server:
   port: 8081
