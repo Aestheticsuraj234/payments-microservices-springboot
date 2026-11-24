@@ -1,6 +1,7 @@
 package dev.payments.wallet.web;
 
 import dev.payments.wallet.error.ConflictException;
+import dev.payments.wallet.error.IdempotencyException;
 import dev.payments.wallet.error.NotFoundException;
 import dev.payments.wallet.error.PaymentsException;
 import dev.payments.wallet.error.RuleViolationException;
@@ -63,6 +64,11 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                 yield p;
             }
             case RuleViolationException e -> problem(HttpStatus.UNPROCESSABLE_CONTENT, e.code(), e.getMessage());
+            case IdempotencyException e -> problem(switch (e.reason()) {
+                case KEY_REQUIRED -> HttpStatus.BAD_REQUEST;
+                case KEY_REUSED -> HttpStatus.UNPROCESSABLE_CONTENT;
+                case IN_PROGRESS -> HttpStatus.CONFLICT;
+            }, e.reason().code(), e.getMessage());
         };
         return ResponseEntity.of(problem).build();
     }

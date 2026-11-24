@@ -10,7 +10,8 @@ package dev.payments.wallet.error;
  * without deciding its HTTP status is a compile error.
  */
 public sealed abstract class PaymentsException extends RuntimeException
-        permits NotFoundException, ConflictException, ValidationException, RuleViolationException {
+        permits NotFoundException, ConflictException, ValidationException, RuleViolationException,
+        IdempotencyException {
 
     protected PaymentsException(String message) {
         super(message);

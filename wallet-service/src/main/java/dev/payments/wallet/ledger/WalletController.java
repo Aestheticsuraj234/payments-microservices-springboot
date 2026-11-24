@@ -3,12 +3,15 @@ package dev.payments.wallet.ledger;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import dev.payments.wallet.error.FieldErrors;
 import dev.payments.wallet.error.NotFoundException;
+import dev.payments.wallet.idempotency.IdempotentRequests;
 import dev.payments.wallet.money.Money;
+import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -58,9 +61,11 @@ public class WalletController {
     }
 
     private final WalletService wallets;
+    private final IdempotentRequests idempotent;
 
-    public WalletController(WalletService wallets) {
+    public WalletController(WalletService wallets, IdempotentRequests idempotent) {
         this.wallets = wallets;
+        this.idempotent = idempotent;
     }
 
     @PostMapping
@@ -87,11 +92,14 @@ public class WalletController {
         return new BalanceResponse(walletId, wallets.balance(walletId));
     }
 
+    /** Moves money, so it runs once per {@code Idempotency-Key}: a retry gets the first response back. */
     @PostMapping("/{id}/deposits")
-    ResponseEntity<DepositResponse> deposit(@PathVariable String id, @RequestBody Money amount) {
+    ResponseEntity<byte[]> deposit(@PathVariable String id, @RequestBody Money amount, HttpServletRequest request) {
         UUID walletId = walletId(id);
-        Transaction tx = wallets.deposit(walletId, amount);
-        return ResponseEntity.status(201).body(new DepositResponse(tx.id(), walletId, amount, tx.createdAt()));
+        return idempotent.run(request, amount, HttpStatus.CREATED, () -> {
+            Transaction tx = wallets.deposit(walletId, amount);
+            return new DepositResponse(tx.id(), walletId, amount, tx.createdAt());
+        });
     }
 
     @GetMapping("/{id}/entries")

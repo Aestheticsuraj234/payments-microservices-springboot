@@ -13,7 +13,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 class MoneyRulesTest {
 
     private final MoneyRules rules = new MoneyRules(
-            new WalletProperties(1_000, new WalletProperties.PageSize(20, 100)));
+            new WalletProperties(1_000, new WalletProperties.PageSize(20, 100),
+            new WalletProperties.Idempotency(java.time.Duration.ofHours(24), java.time.Duration.ofMinutes(1))));
 
     @ParameterizedTest
     @ValueSource(longs = {1, 999, 1_000})

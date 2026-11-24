@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 class RetryingTransactionsTest {
 
@@ -47,5 +48,21 @@ class RetryingTransactionsTest {
             throw new DataIntegrityViolationException("not balanced");
         })).isInstanceOf(DataIntegrityViolationException.class);
         assertThat(attempts).hasValue(1);
+    }
+
+    @Test
+    void insideAnotherTransactionItJoinsAndNeverRetries() {
+        var attempts = new AtomicInteger();
+        TransactionSynchronizationManager.setActualTransactionActive(true);
+        try {
+            assertThatThrownBy(() -> transactions.run(() -> {
+                attempts.incrementAndGet();
+                throw new CannotAcquireLockException("deadlock detected");
+            })).isInstanceOf(CannotAcquireLockException.class);
+        } finally {
+            TransactionSynchronizationManager.setActualTransactionActive(false);
+        }
+        assertThat(attempts).as("the outer transaction's owner retries, not us").hasValue(1);
+        assertThat(txManager.begun).isZero();
     }
 }
