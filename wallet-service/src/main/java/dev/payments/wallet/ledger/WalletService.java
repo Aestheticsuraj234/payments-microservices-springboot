@@ -4,6 +4,7 @@ import dev.payments.wallet.config.WalletProperties;
 import dev.payments.wallet.error.ConflictException;
 import dev.payments.wallet.error.FieldErrors;
 import dev.payments.wallet.error.NotFoundException;
+import dev.payments.wallet.error.RuleViolationException;
 import dev.payments.wallet.money.Money;
 import dev.payments.wallet.money.MoneyRules;
 import java.util.List;
@@ -24,14 +25,20 @@ public class WalletService {
     /** The system account that funds deposits: the money we hold at our bank, one per currency. */
     static final String SETTLEMENT = "settlement";
 
+    /** The stable code clients get when a wallet can't cover a transfer. */
+    public static final String INSUFFICIENT_FUNDS = "insufficient_funds";
+
     private final LedgerRepository ledger;
     private final MoneyRules moneyRules;
     private final WalletProperties properties;
+    private final RetryingTransactions transactions;
 
-    public WalletService(LedgerRepository ledger, MoneyRules moneyRules, WalletProperties properties) {
+    public WalletService(LedgerRepository ledger, MoneyRules moneyRules, WalletProperties properties,
+            RetryingTransactions transactions) {
         this.ledger = ledger;
         this.moneyRules = moneyRules;
         this.properties = properties;
+        this.transactions = transactions;
     }
 
     /** Opens a wallet for an owner, in one currency. An owner can have one wallet per currency. */
@@ -97,6 +104,78 @@ public class WalletService {
         return ledger.post("deposit", List.of(
                 Posting.debit(settlement, amount.amount()),
                 Posting.credit(wallet, amount.amount())));
+    }
+
+    /**
+     * Moves money between two wallets in the same currency, as one balanced
+     * transaction: a debit to the sender, a credit to the receiver.
+     *
+     * <p>Validation reads the wallets without locks: accounts never change
+     * currency or owner. Only the balance can change under us, so the balance
+     * check runs inside the transaction, after both wallets are locked.
+     */
+    public Transfer transfer(String fromId, String toId, Money amount) {
+        var errors = new FieldErrors();
+        moneyRules.checkAmount(errors, "amount", amount.amount());
+        Account from = walletField(errors, "from", fromId);
+        Account to = walletField(errors, "to", toId);
+        if (from != null && to != null) {
+            if (from.id().equals(to.id())) {
+                errors.add("to", "must be a different wallet");
+            } else if (!to.currency().equals(from.currency())) {
+                errors.add("to", "must be a " + from.currency() + " wallet, like from");
+            } else if (!from.currency().equals(amount.currency())) {
+                errors.add("currency", "must match the wallets' currency, " + from.currency());
+            }
+        }
+        errors.throwIfAny();
+
+        Transaction tx = transactions.run(() -> {
+            // Lock both wallets until we commit. Another transfer touching
+            // either one waits right here, so the balance below stays true.
+            lockInOrder(from.id(), to.id());
+            if (ledger.balance(from.id()) < amount.amount()) {
+                throw new RuleViolationException(INSUFFICIENT_FUNDS, "insufficient funds");
+            }
+            return ledger.post("transfer", List.of(
+                    Posting.debit(from, amount.amount()),
+                    Posting.credit(to, amount.amount())));
+        });
+        return new Transfer(tx.id(), from.id(), to.id(), amount, tx.createdAt());
+    }
+
+    /**
+     * Locks two accounts, the lower id first. Every caller takes locks in the
+     * same order, so two transactions can never each hold the lock the other
+     * is waiting for: no deadlocks. (Any fixed total order works; we use
+     * {@link UUID#compareTo}.)
+     */
+    private void lockInOrder(UUID a, UUID b) {
+        if (a.compareTo(b) > 0) {
+            UUID swap = a;
+            a = b;
+            b = swap;
+        }
+        ledger.lock(a);
+        ledger.lock(b);
+    }
+
+    /**
+     * Loads the wallet a request field names. A malformed or unknown id is a
+     * problem with that field, recorded in {@code errors}: the result is null.
+     */
+    private Account walletField(FieldErrors errors, String field, String id) {
+        try {
+            return ledger.findAccount(UUID.fromString(id))
+                    .filter(Account::isWallet)
+                    .orElseGet(() -> {
+                        errors.add(field, "no such wallet");
+                        return null;
+                    });
+        } catch (IllegalArgumentException | NullPointerException e) {
+            errors.add(field, "must be a wallet ID");
+            return null;
+        }
     }
 
     /** A page of a wallet's entries, newest first. A null cursor starts at the newest entry. */

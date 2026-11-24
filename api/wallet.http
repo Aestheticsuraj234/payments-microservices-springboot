@@ -20,3 +20,16 @@ GET {{wallet}}/v1/wallets/{{created.response.body.id}}/balance
 
 ### Entries, newest first
 GET {{wallet}}/v1/wallets/{{created.response.body.id}}/entries?limit=20
+
+### A second wallet, for transfers
+# @name bob
+POST {{wallet}}/v1/wallets
+Content-Type: application/json
+
+{"owner_id": "0b5e2f1a-2222-4333-8444-a55566667777", "currency": "USD"}
+
+### Transfer 3.00 to it
+POST {{wallet}}/v1/transfers
+Content-Type: application/json
+
+{"from": "{{created.response.body.id}}", "to": "{{bob.response.body.id}}", "amount": 300, "currency": "USD"}

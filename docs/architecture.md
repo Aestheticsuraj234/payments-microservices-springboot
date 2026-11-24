@@ -2,7 +2,7 @@
 
 > This page describes the code on the branch you are reading. Every chapter updates it.
 
-## After chapter 2
+## After chapter 3
 
 One service with its own database.
 
@@ -11,8 +11,9 @@ flowchart LR
     client([Client]) -->|HTTP :8081| wallet
     subgraph wallet[wallet-service]
         direction TB
-        f[RequestIdFilter] --> c[WalletController]
+        f[RequestIdFilter] --> c[WalletController<br/>TransferController]
         c --> s[WalletService]
+        s --> rt[RetryingTransactions]
         s --> r[LedgerRepository]
         c -. exceptions .-> h[ApiExceptionHandler]
     end
@@ -35,6 +36,13 @@ flowchart LR
 | `GET` | `/v1/wallets/{id}/balance` | Derived from entries |
 | `POST` | `/v1/wallets/{id}/deposits` | Debits settlement, credits the wallet |
 | `GET` | `/v1/wallets/{id}/entries` | Newest first; `limit` (1–100, default 20) and opaque `cursor` |
+| `POST` | `/v1/transfers` | `{"from", "to", "amount", "currency"}`; same currency; `insufficient_funds` (422) |
+
+### Concurrency rules
+
+- A transfer locks both wallets (`SELECT ... FOR UPDATE`), **lower UUID first**, then checks the balance.
+- Transactions that hit a deadlock or serialization failure are retried whole, up to 5 attempts,
+  with exponential backoff and jitter (`RetryingTransactions`, READ COMMITTED).
 
 ### wallet database
 
@@ -62,7 +70,8 @@ dev.payments.wallet
 ├── WalletApplication
 ├── config     WalletProperties
 ├── error      PaymentsException hierarchy, FieldErrors
-├── ledger     Account, Entry, Transaction, Posting, LedgerRepository, WalletService, WalletController, Cursor
+├── ledger     Account, Entry, Transaction, Transfer, Posting, LedgerRepository, WalletService,
+│              RetryingTransactions, WalletController, TransferController, Cursor
 ├── money      Money, MoneyRules
 └── web        ApiExceptionHandler, RequestIdFilter
 ```
