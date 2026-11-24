@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- Spring Boot's parent manages the versions of every library we use,
+         so the service poms list dependencies without versions. -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.2.0</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>dev.payments</groupId>
+    <artifactId>payments-parent</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>payments</name>
+    <description>A payments backend built as microservices, one chapter at a time</description>
+
+    <properties>
+        <java.version>21</java.version>
+    </properties>
+
+    <!-- One module per service. Each builds into its own runnable jar. -->
+    <modules>
+        <module>wallet-service</module>
+    </modules>
+
+    <build>
+        <plugins>
+            <!-- Unit tests (*Test) run in `test`; integration tests (*IT), which
+                 start Spring and real containers, run in `verify`. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>

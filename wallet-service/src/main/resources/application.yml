@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: wallet-service
+  jackson:
+    # Our JSON API speaks snake_case (created_at, owner_id), like the Go reference.
+    property-naming-strategy: SNAKE_CASE
+
+server:
+  port: 8081
+  # Finish in-flight requests before stopping, instead of cutting them off.
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      # /actuator/health/liveness and /actuator/health/readiness, for container platforms
+      probes:
+        enabled: true
+
+logging:
+  pattern:
+    # Every log line carries the request ID from RequestIdFilter.
+    level: "%5p [${spring.application.name:-},%X{requestId:-}]"
+
+wallet:
+  max-amount: 100000000   # a million dollars, in cents
+  page-size:
+    default-size: 20
+    max: 100
