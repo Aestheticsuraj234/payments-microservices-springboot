@@ -22,11 +22,14 @@
 
     <properties>
         <java.version>21</java.version>
+        <!-- Not managed by Spring Boot: Spring Security's Argon2 encoder needs it. -->
+        <bouncycastle.version>1.86</bouncycastle.version>
     </properties>
 
     <!-- One module per service. Each builds into its own runnable jar. -->
     <modules>
         <module>wallet-service</module>
+        <module>auth-service</module>
     </modules>
 
     <build>

@@ -246,4 +246,4 @@ This also completes the wallet as a standalone service. In chapter 5 we build a 
 3. Write a test where the client retries *while* the first request is blocked on a wallet lock.
    Which status does the retry get?
 
-**Next:** Chapter 5 — The auth service
+**Next:** [Chapter 5 — The auth service](05-auth-service.md)

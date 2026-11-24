@@ -2,9 +2,21 @@
 
 > This page describes the code on the branch you are reading. Every chapter updates it.
 
-## After chapter 4
+## After chapter 5
 
-One service with its own database.
+Two independent services, each with its own database. They don't call each other yet.
+
+```mermaid
+flowchart LR
+    client([Client]) -->|HTTP :8082| auth
+    subgraph auth[auth-service]
+        direction TB
+        sec[Spring Security<br/>JWT resource server] --> ac[AuthController]
+        ac --> as[AuthService] --> at[AccessTokens RS256]
+        jw[JwksController]
+    end
+    as --> adb[(PostgreSQL: auth)]
+```
 
 ```mermaid
 flowchart LR
@@ -25,10 +37,34 @@ flowchart LR
 
 | Component | Port | Description |
 |---|---|---|
-| `wallet-service` | 8081 | Wallets, deposits, balances, entries: the double-entry ledger |
-| PostgreSQL 17 | 5433 (host) | One database per service; today only `wallet` |
+| `wallet-service` | 8081 | Wallets, deposits, balances, entries, transfers: the double-entry ledger |
+| `auth-service` | 8082 | Users, argon2id passwords, RS256 access tokens, rotating refresh tokens, JWKS |
+| PostgreSQL 17 | 5433 (host) | One database per service: `wallet`, `auth` |
+
+### auth-service API
+
+| Method | Path | Notes |
+|---|---|---|
+| `POST` | `/v1/auth/register` | `{"email", "password"}`; email case-insensitive unique; password 12–128 chars |
+| `POST` | `/v1/auth/login` | Returns `access_token` (JWT, 15 min), `refresh_token` (opaque, 30 days) |
+| `POST` | `/v1/auth/refresh` | Rotates; reusing a rotated token revokes its whole family |
+| `POST` | `/v1/auth/logout` | Revokes the token's family |
+| `GET` | `/v1/auth/me` | Needs `Authorization: Bearer <access token>` |
+| `GET` | `/.well-known/jwks.json` | Public signing keys |
+
+Access token claims: `iss=payments-auth`, `aud=[payments]`, `sub=<user id>`, `iat`, `exp`, `jti`; header `kid`.
+
+### auth database
+
+| Table | Purpose |
+|---|---|
+| `users` | `email citext UNIQUE`, `password_hash` (argon2id PHC string) |
+| `refresh_tokens` | SHA-256 of each token, its family, parent, rotated/revoked/expiry times |
 
 ### wallet-service API
+
+`owner_id` still comes from the request body; chapter 6 takes it from the verified token instead.
+
 
 | Method | Path | Notes |
 |---|---|---|
@@ -73,7 +109,13 @@ bytes back with `Idempotent-Replayed: true`. Errors: `idempotency_key_required` 
 - **Data:** Flyway migrations, `JdbcClient` SQL, invariants enforced in the database.
 - **Tests:** `*Test` run in `mvn test`; `*IT` (full application, PostgreSQL via Testcontainers) in `mvn verify`.
 
-### Package layout (wallet-service)
+### Package layout
+
+auth-service: `dev.payments.auth` — `AuthApplication`, `AuthProperties`, `error`, `web`
+(incl. `ProblemAuthenticationEntryPoint`), `security` (`SecurityConfig`), `token` (`SigningKeyConfig`,
+`AccessTokens`, `JwksController`), `user` (`AuthService`, `AuthController`, repositories).
+
+wallet-service:
 
 ```
 dev.payments.wallet

@@ -1,0 +1,28 @@
+### Requests for the auth service.
+@auth = http://localhost:8082
+
+### Register
+POST {{auth}}/v1/auth/register
+Content-Type: application/json
+
+{"email": "alice@example.com", "password": "correct horse battery staple"}
+
+### Log in
+# @name login
+POST {{auth}}/v1/auth/login
+Content-Type: application/json
+
+{"email": "alice@example.com", "password": "correct horse battery staple"}
+
+### Who am I?
+GET {{auth}}/v1/auth/me
+Authorization: Bearer {{login.response.body.access_token}}
+
+### Refresh: the old refresh token stops working
+POST {{auth}}/v1/auth/refresh
+Content-Type: application/json
+
+{"refresh_token": "{{login.response.body.refresh_token}}"}
+
+### The public keys that verify access tokens
+GET {{auth}}/.well-known/jwks.json

@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: auth-service
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+  datasource:
+    # Its own database: no other service may read users or tokens.
+    url: jdbc:postgresql://localhost:5433/auth
+    username: payments
+    password: payments
+
+server:
+  port: 8082
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  pattern:
+    level: "%5p [${spring.application.name:-},%X{requestId:-}]"
+
+auth:
+  issuer: payments-auth
+  audience: payments
+  access-token-ttl: 15m
+  refresh-token-ttl: 30d
+  # A PKCS#8 PEM RSA private key (scripts/dev-keys.sh writes one). Without it,
+  # the service makes a fresh key at startup: fine on a laptop, but tokens
+  # stop working on every restart, and two instances wouldn't trust each other.
+  private-key-location:
