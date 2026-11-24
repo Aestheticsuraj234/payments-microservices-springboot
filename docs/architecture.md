@@ -2,7 +2,7 @@
 
 > This page describes the code on the branch you are reading. Every chapter updates it.
 
-## After chapter 11
+## After chapter 12 (the complete system)
 
 Clients talk only to the gateway. It verifies tokens, limits rates, and routes to three services, each
 with its own database. Transfers run as sagas: the transfer service orchestrates holds in the wallet
@@ -65,6 +65,15 @@ flowchart LR
 | Jaeger 2 | 16686 (UI), 4318 (OTLP) | Traces from every service |
 | Prometheus 3 | 9090 | Scrapes `/actuator/prometheus` on every service (gateway: port 9080) |
 | Grafana 13 | 3000 | The Payments dashboard, over Prometheus and Jaeger |
+
+### Running it
+
+- `docker compose up -d --wait`: infrastructure only; run services from source.
+- `docker compose --profile app up -d --build --wait`: everything as containers, built from one
+  multi-stage [`Dockerfile`](../Dockerfile) (`--build-arg SERVICE=...`): layered jar, JRE, non-root.
+  Only the gateway's port 8080 is published; services reach each other by name; Kafka advertises
+  `kafka:29092` to containers and `localhost:9092` to the host; the signing key is a Compose secret.
+- CI: `build` (`./mvnw verify`), then `system` (all images, Compose, [`scripts/smoke.sh`](../scripts/smoke.sh)).
 
 ### Observability
 

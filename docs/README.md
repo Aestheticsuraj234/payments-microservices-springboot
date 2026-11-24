@@ -16,6 +16,7 @@ Read the chapters in order: each one builds on the previous ones, and says so at
 | 09 | [The notification service](09-notification-service.md) |
 | 10 | [Resilience](10-resilience.md) |
 | 11 | [Observability](11-observability.md) |
+| 12 | [Shipping it](12-shipping.md) |
 
 Living documents, updated by every chapter:
 

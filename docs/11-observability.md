@@ -260,4 +260,4 @@ this observability stack — with one command.
 4. Set `sampling.probability: 0.1` and send 100 transfers. How many traces appear, and why do the
    ones that appear stay complete across all five services?
 
-**Next:** Chapter 12 — Shipping it
+**Next:** [Chapter 12 — Shipping it](12-shipping.md)

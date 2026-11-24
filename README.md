@@ -1,12 +1,23 @@
 # Payments Microservices with Spring Boot — a course in chapters
 
-A payments backend built **one concept at a time** with Java 21, Spring Boot 4 and Spring Cloud.
+A payments backend built **one concept at a time** with Java 21, Spring Boot 4.2 and Spring Cloud 2026.0.
 Every chapter is a branch, a pull request and a document. Read the chapters in order, or check out
 any chapter's branch to see the code exactly as it was at the end of that chapter.
 
 The design is ported from a production-grade Go payments system (kept in [`reference/go`](reference/go)).
 We reuse its database schemas, its API contracts and its rules about money, and rebuild them the
 Spring way, explaining every decision along the way.
+
+```mermaid
+flowchart LR
+    client([Client]) -->|:8080| gw[gateway]
+    gw --> auth[auth-service]
+    gw --> wallet[wallet-service]
+    gw --> transfer[transfer-service]
+    transfer -->|saga: hold / capture / release| wallet
+    wallet -->|outbox → Kafka| notification[notification-service]
+    notification -->|emails| mail[Mailpit]
+```
 
 ## Chapters
 
@@ -22,34 +33,52 @@ Spring way, explaining every decision along the way.
 | 07 | [Events and the outbox](docs/07-events-outbox.md) | `ch07-events-outbox` | Kafka, the transactional outbox pattern, a relay | ✅ |
 | 08 | [The transfer service and sagas](docs/08-transfer-saga.md) | `ch08-transfer-saga` | Service-to-service HTTP, holds, an orchestrated saga with compensation | ✅ |
 | 09 | [The notification service](docs/09-notification-service.md) | `ch09-notification-service` | Idempotent consumers, retries, a dead-letter topic, email | ✅ |
-| 10 | [Resilience](docs/10-resilience.md) | `ch10-resilience` | Timeouts, retries, circuit breakers, bulkheads | ✅ |
+| 10 | [Resilience](docs/10-resilience.md) | `ch10-resilience` | Timeouts, retries, circuit breakers | ✅ |
 | 11 | [Observability](docs/11-observability.md) | `ch11-observability` | Distributed tracing, metrics, dashboards | ✅ |
-| 12 | Shipping it | `ch12-shipping` | Container images, the whole system in Compose, CI | planned |
+| 12 | [Shipping it](docs/12-shipping.md) | `ch12-shipping` | Container images, the whole system in Compose, CI | ✅ |
 
-## Prerequisites
+`git log --first-parent main` reads as the table of contents: one merge per chapter.
+The current system, in detail: [docs/architecture.md](docs/architecture.md).
 
-- Java 21
-- Docker (for PostgreSQL, Redis, Kafka and the integration tests)
-- Maven is optional: the project ships a Maven wrapper
+## Run the whole system
 
-## Build and test
+You need Docker and `openssl`.
 
 ```bash
-./mvnw verify                      # every module: unit tests, then integration tests (needs Docker)
-docker compose up -d --wait        # PostgreSQL (5433), Redis, Kafka, Mailpit, Jaeger, Prometheus, Grafana
-./scripts/dev-keys.sh              # a local signing key for auth-service, in secrets/
-./mvnw -q install -DskipTests
-java -jar auth-service/target/auth-service-1.0.0-SNAPSHOT.jar --auth.private-key-location=file:secrets/auth-signing-key.pem &
-java -jar wallet-service/target/wallet-service-1.0.0-SNAPSHOT.jar &
-java -jar transfer-service/target/transfer-service-1.0.0-SNAPSHOT.jar &
-java -jar notification-service/target/notification-service-1.0.0-SNAPSHOT.jar &
-java -jar gateway/target/gateway-1.0.0-SNAPSHOT.jar &
+./scripts/dev-keys.sh                                  # a local signing key for auth-service, in secrets/
+docker compose --profile app up -d --build --wait      # infrastructure + the five services
+./scripts/smoke.sh                                     # sign up, deposit, transfer, check balances and emails
 ```
 
-Clients use the gateway on port 8080: start with [`api/gateway.http`](api/gateway.http).
-Emails appear in Mailpit at http://localhost:8025, traces in Jaeger at http://localhost:16686,
-and the dashboard in Grafana at http://localhost:3000.
+| What | Where |
+|---|---|
+| The API (the only published service port) | http://localhost:8080, requests in [`api/gateway.http`](api/gateway.http) |
+| Emails | Mailpit, http://localhost:8025 |
+| Traces | Jaeger, http://localhost:16686 |
+| Metrics | Prometheus, http://localhost:9090 |
+| Dashboard | Grafana, http://localhost:3000 → Payments |
 
+```bash
+docker compose --profile app down -v
+```
+
+## Develop
+
+You need Java 21 and Docker. Maven is optional: the project ships a Maven wrapper.
+
+```bash
+./mvnw verify                      # every module: unit tests, then integration tests (Testcontainers)
+docker compose up -d --wait        # infrastructure only, then run any service from your IDE or:
+./mvnw -pl wallet-service spring-boot:run
+```
+
+| Module | Port | Responsibility |
+|---|---|---|
+| `gateway` | 8080 (actuator 9080) | JWT checks, `X-User-ID`, rate limits, CORS, circuit breakers, routing |
+| `wallet-service` | 8081 | Double-entry ledger: wallets, deposits, balances, holds; events via outbox |
+| `auth-service` | 8082 | Users, argon2id passwords, RS256 access tokens, rotating refresh tokens, JWKS |
+| `transfer-service` | 8083 | Transfers as orchestrated sagas over wallet holds |
+| `notification-service` | 8084 | Emails from wallet events; idempotent, with a dead-letter topic |
 
 ## License
 

@@ -6,6 +6,8 @@ on:
     branches: [main]
 
 jobs:
+  # Unit tests, then integration tests against real PostgreSQL, Kafka, Redis
+  # and Mailpit in Testcontainers (the runner has Docker).
   build:
     runs-on: ubuntu-latest
     steps:
@@ -15,6 +17,25 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
-      # Unit tests, then integration tests (Testcontainers uses the runner's Docker).
       - name: Build and test
         run: ./mvnw -B verify
+
+  # The whole system, as it ships: build every image, start everything with
+  # Compose, and drive it through the gateway like a client would.
+  system:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Signing key for the auth service
+        run: ./scripts/dev-keys.sh
+      - name: Build the images and start the system
+        run: docker compose --profile app up -d --build --wait --wait-timeout 300
+      - name: Smoke test
+        run: ./scripts/smoke.sh
+      - name: Logs, if anything failed
+        if: failure()
+        run: docker compose --profile app logs --no-color --tail 200
+      - name: Stop
+        if: always()
+        run: docker compose --profile app down -v
