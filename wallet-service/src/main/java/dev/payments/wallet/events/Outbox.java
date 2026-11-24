@@ -24,11 +24,13 @@ public class Outbox {
     private final JdbcClient jdbc;
     private final JsonMapper json;
     private final String topic;
+    private final TraceContexts traces;
 
-    public Outbox(JdbcClient jdbc, JsonMapper json, OutboxProperties properties) {
+    public Outbox(JdbcClient jdbc, JsonMapper json, OutboxProperties properties, TraceContexts traces) {
         this.jdbc = jdbc;
         this.json = json;
         this.topic = properties.topic();
+        this.traces = traces;
     }
 
     /** Records an event about {@code walletId}. Must run inside the transaction that made it happen. */
@@ -36,13 +38,15 @@ public class Outbox {
     public void enqueue(String type, UUID walletId, Object data) {
         var event = new WalletEvents.Envelope(UUID.randomUUID(), type, Instant.now(), walletId, data);
         jdbc.sql("""
-                        INSERT INTO outbox (event_id, topic, message_key, payload)
-                        VALUES (:id, :topic, :key, CAST(:payload AS json))
+                        INSERT INTO outbox (event_id, topic, message_key, payload, traceparent)
+                        VALUES (:id, :topic, :key, CAST(:payload AS json), :traceparent)
                         """)
                 .param("id", event.id())
                 .param("topic", topic)
                 .param("key", walletId.toString())
                 .param("payload", json.writeValueAsString(event))
+                // The trace of the request that made the change: the relay continues it.
+                .param("traceparent", traces.current())
                 .update();
     }
 }

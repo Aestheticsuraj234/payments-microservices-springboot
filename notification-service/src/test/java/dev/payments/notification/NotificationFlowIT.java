@@ -18,6 +18,8 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.micrometer.metrics.test.autoconfigure.AutoConfigureMetrics;
+import org.springframework.boot.micrometer.tracing.test.autoconfigure.AutoConfigureTracing;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
@@ -40,6 +42,8 @@ import tools.jackson.databind.json.JsonMapper;
  * auth service. Events are published the way the wallet's relay publishes them.
  */
 @SpringBootTest(properties = "notification.retry.initial-delay=100ms")
+@AutoConfigureTracing
+@AutoConfigureMetrics
 @Import(NotificationFlowIT.Containers.class)
 class NotificationFlowIT {
 
@@ -192,5 +196,38 @@ class NotificationFlowIT {
                 return parked.stream().filter(v -> v.contains(marker.toString())).count() == 2;
             });
         }
+    }
+
+    @Test
+    void theEventsTraceContinuesIntoTheConsumersCalls() throws Exception {
+        UUID owner = auth.user();
+        String traceId = UUID.randomUUID().toString().replace("-", "");
+        var record = new org.apache.kafka.clients.producer.ProducerRecord<>("wallet.events",
+                UUID.randomUUID().toString(), deposit(UUID.randomUUID(), owner, 40));
+        // As the wallet's relay publishes it: inside the trace of the original request.
+        record.headers().add("traceparent",
+                ("00-" + traceId + "-" + traceId.substring(0, 16) + "-01").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        // A plain producer: the test's KafkaTemplate is instrumented, and would
+        // replace our traceparent with a trace of its own.
+        try (var producer = new org.apache.kafka.clients.producer.KafkaProducer<String, String>(Map.<String, Object>of(
+                org.apache.kafka.clients.producer.ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaContainer.getBootstrapServers()),
+                new org.apache.kafka.common.serialization.StringSerializer(),
+                new org.apache.kafka.common.serialization.StringSerializer())) {
+            producer.send(record).get();
+        }
+
+        await().atMost(Duration.ofSeconds(20)).until(() -> auth.traceparents.containsKey(owner));
+        assertThat(auth.traceparents.get(owner)).contains(traceId);
+    }
+
+    @Autowired
+    io.micrometer.core.instrument.MeterRegistry meters;
+
+    @Test
+    void sentAndDeadLetteredMessagesAreCounted() throws Exception {
+        double before = meters.counter("notification.dead.letters").count();
+        publish("not json either " + UUID.randomUUID());
+        await().atMost(Duration.ofSeconds(20)).until(() -> meters.counter("notification.dead.letters").count() > before);
+        assertThat(meters.find("notifications.sent").counter()).isNotNull();
     }
 }

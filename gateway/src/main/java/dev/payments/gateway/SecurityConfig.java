@@ -30,7 +30,9 @@ class SecurityConfig {
     /** Routes anyone may call: you can't have a token before you log in. */
     static final String[] PUBLIC = {
             "/v1/auth/register", "/v1/auth/login", "/v1/auth/refresh", "/v1/auth/logout",
-            "/actuator/health/**",
+            // Actuator lives on the management port (9080), which is never published:
+            // Prometheus and the platform's health checks reach it from inside.
+            "/actuator/**",
             // Where the circuit breaker forwards failed requests: always answerable.
             FallbackController.PATH
     };

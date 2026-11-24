@@ -2,7 +2,7 @@
 
 > This page describes the code on the branch you are reading. Every chapter updates it.
 
-## After chapter 10
+## After chapter 11
 
 Clients talk only to the gateway. It verifies tokens, limits rates, and routes to three services, each
 with its own database. Transfers run as sagas: the transfer service orchestrates holds in the wallet
@@ -62,6 +62,21 @@ flowchart LR
 | Redis 7 | 6379 | Gateway rate-limit buckets |
 | Kafka 4.2 (KRaft) | 9092 | Events; topic auto-creation off |
 | Mailpit | 1025 (SMTP), 8025 (UI) | Catches every email |
+| Jaeger 2 | 16686 (UI), 4318 (OTLP) | Traces from every service |
+| Prometheus 3 | 9090 | Scrapes `/actuator/prometheus` on every service (gateway: port 9080) |
+| Grafana 13 | 3000 | The Payments dashboard, over Prometheus and Jaeger |
+
+### Observability
+
+- **Traces:** Micrometer Tracing on OpenTelemetry, W3C `traceparent`, exported over OTLP to Jaeger;
+  sampling 100 % locally. HTTP, clients, Spring Security, Redis and Kafka are instrumented. Trace
+  context is stored with outbox rows (wallet) and transfers (transfer) and continued by the relay and
+  the orchestrator, so one transfer is one trace across all five services.
+- **Metrics:** Prometheus format, tagged `application`; HTTP latency histograms; business metrics
+  `outbox_unpublished`, `transfers_finished_total{state}`, `saga_step_retries_total{step}`,
+  `notifications_sent_total`, `notification_dead_letters_total`; Resilience4j breaker states.
+- **Logs:** `[traceId,spanId,requestId]` on every line.
+- The gateway serves actuator on management port **9080** only.
 
 ### gateway routes
 
@@ -153,7 +168,7 @@ exhausted ones go to `wallet.events.dlt`. New groups start at `earliest`.
 
 | Table | Purpose |
 |---|---|
-| `transfers` | One row per saga: state, failure reason, attempts, next attempt, version; `UNIQUE (user_id, idempotency_key)` |
+| `transfers` | One row per saga: state, failure reason, attempts, next attempt, version, `traceparent`; `UNIQUE (user_id, idempotency_key)` |
 | `transfer_steps` | Every try of every step |
 
 ### Idempotency
@@ -179,7 +194,7 @@ bytes back with `Idempotent-Replayed: true`. Errors: `idempotency_key_required` 
 | `entries` | Debits and credits; append-only; balanced per transaction at commit |
 | `account_balances` (view) | Balances derived from entries |
 | `idempotency_keys` | One row per key: fingerprint, status, the stored response |
-| `outbox` | Events written with the change they describe; `published_at` set by the relay |
+| `outbox` | Events written with the change they describe; `published_at` set by the relay; `traceparent` |
 | `holds` | Money set aside for a transfer saga: `held`, `captured` or `released` |
 
 ### wallet events (topic `wallet.events`, 3 partitions, key = wallet id)
@@ -198,7 +213,8 @@ Delivery is at least once: consumers deduplicate by `id`.
 - **Errors:** RFC 9457 Problem Details with a stable `code`, `fields` for validation errors, and
   `request_id`. Business code throws sealed `PaymentsException`s; one advice maps them to HTTP.
 - **JSON:** snake_case. Money is `{"amount": <minor units>, "currency": "USD"}`.
-- **Logs:** every line carries `[service-name,request-id]`.
+- **Logs:** every line carries `[trace-id,span-id,request-id]`.
+- **Observability:** every service exports traces (OTLP) and metrics (`/actuator/prometheus`).
 - **Health:** `/actuator/health/liveness` and `/actuator/health/readiness`.
 - **Data:** Flyway migrations, `JdbcClient` SQL, invariants enforced in the database.
 - **Events:** written to an outbox in the same transaction as the change; relayed to Kafka; versioned types.
@@ -232,7 +248,8 @@ dev.payments.wallet
 ├── WalletApplication
 ├── config     WalletProperties
 ├── error      PaymentsException hierarchy (incl. Idempotency-, UnauthenticatedException), FieldErrors
-├── events     WalletEvents (the contract), Outbox, OutboxRelay, OutboxProperties, KafkaTopicConfig
+├── events     WalletEvents (the contract), Outbox, OutboxRelay, OutboxProperties, KafkaTopicConfig,
+│              TraceContexts
 ├── idempotency IdempotencyKey, IdempotencyStore, IdempotentRequests, IdempotencyCleanup
 ├── holds      Hold, HoldRepository, HoldService, InternalController
 ├── ledger     Account, Entry, Transaction, Posting, LedgerRepository, WalletService,

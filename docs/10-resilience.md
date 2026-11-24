@@ -273,4 +273,4 @@ dependency struggling before users do.
 3. Put [Toxiproxy](https://github.com/Shopify/toxiproxy) between transfer-service and the wallet
    (the Go reference does in `deploy/chaos`) and add 2 s of latency. Which breaker setting reacts?
 
-**Next:** Chapter 11 — Observability
+**Next:** [Chapter 11 — Observability](11-observability.md)

@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 class OutboxRelayTest {
 
     private static OutboxRelay.Message message(long seq) {
-        return new OutboxRelay.Message(seq, UUID.randomUUID(), "wallet.events", "key", "{}");
+        return new OutboxRelay.Message(seq, UUID.randomUUID(), "wallet.events", "key", "{}", null);
     }
 
     @Test

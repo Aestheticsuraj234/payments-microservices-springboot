@@ -81,10 +81,35 @@ server:
   shutdown: graceful
 
 management:
+  server:
+    # Actuator (health, metrics) on its own port, inside the network only.
+    # The public port 8080 serves the API and nothing else.
+    port: 9080
+  # Observability (chapter 11).
+  tracing:
+    sampling:
+      probability: 1.0   # keep every trace on a laptop; production samples, say 0.1
+    propagation:
+      type: w3c          # the standard traceparent header, understood by every service and Kafka
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: http://localhost:4318/v1/traces   # Jaeger, from docker-compose.yml
+  otlp:
+    metrics:
+      export:
+        enabled: false   # metrics are pulled by Prometheus instead
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true   # buckets, so Prometheus can compute p95 latency
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
   endpoint:
     health:
       probes:
@@ -96,3 +121,7 @@ gateway:
   audience: payments
   allowed-origins:
     - http://localhost:3000
+
+logging:
+  pattern:
+    correlation: "[%X{traceId:-},%X{spanId:-},%X{requestId:-}] "

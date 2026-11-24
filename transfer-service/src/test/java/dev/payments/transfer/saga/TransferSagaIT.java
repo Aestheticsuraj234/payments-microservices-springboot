@@ -196,4 +196,42 @@ class TransferSagaIT {
                 .exchange()
                 .expectStatus().isNotFound();
     }
+
+    @Test
+    void aTransferIsOneTraceFromRequestToEveryStep() {
+        var alice = wallet.wallet("USD");
+        var bob = wallet.wallet("USD");
+        String traceId = UUID.randomUUID().toString().replace("-", "");
+        String incoming = "00-" + traceId + "-" + traceId.substring(0, 16) + "-01";
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> accepted = client.post().uri("/v1/transfers")
+                .header("X-User-ID", alice.owner().toString())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .header("traceparent", incoming) // as the gateway sends it
+                .body(Map.of("from", alice.id(), "to", bob.id(), "amount", 5, "currency", "USD"))
+                .exchange().expectStatus().isAccepted()
+                .expectBody(Map.class).returnResult().getResponseBody();
+        awaitFinal(alice, accepted.get("id"), "completed");
+
+        // The steps ran later, on the orchestrator's thread, yet the wallet
+        // received them inside the request's trace.
+        String id = (String) accepted.get("id");
+        assertThat(wallet.traceparents.get("hold:" + id)).contains(traceId);
+        assertThat(wallet.traceparents.get("capture:" + id)).contains(traceId);
+    }
+
+    @Test
+    void finishedTransfersAreCountedByState() {
+        var alice = wallet.wallet("USD");
+        var bob = wallet.wallet("USD");
+        awaitFinal(alice, send(alice, bob, 1).get("id"), "completed");
+
+        client.get().uri("/actuator/prometheus").exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .value(body -> assertThat(body)
+                        .contains("transfers_finished_total{application=\"transfer-service\",state=\"completed\"")
+                        .contains("resilience4j_circuitbreaker_state"));
+    }
 }

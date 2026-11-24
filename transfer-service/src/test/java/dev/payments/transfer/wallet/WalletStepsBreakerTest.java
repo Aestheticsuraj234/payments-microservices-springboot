@@ -22,7 +22,7 @@ class WalletStepsBreakerTest {
         breakers.circuitBreaker("wallet").transitionToForcedOpenState();
         var steps = new WalletSteps(wallet, breakers);
         var transfer = new Transfer(UUID.randomUUID(), UUID.randomUUID(), "k", UUID.randomUUID(), UUID.randomUUID(),
-                100, "USD", State.PENDING, "", 0, 1, Instant.now(), Instant.now());
+                100, "USD", State.PENDING, "", 0, 1, Instant.now(), Instant.now(), null);
 
         StepOutcome outcome = steps.run(Saga.Step.HOLD, transfer);
 

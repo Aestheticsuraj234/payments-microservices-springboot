@@ -17,6 +17,8 @@ final class FakeAuth {
     private final HttpServer server;
     private final Map<UUID, String> emails = new ConcurrentHashMap<>();
     private final Map<UUID, Deque<Integer>> outages = new ConcurrentHashMap<>();
+    /** The traceparent each lookup arrived with, by user. */
+    final Map<UUID, String> traceparents = new ConcurrentHashMap<>();
 
     FakeAuth() {
         try {
@@ -26,6 +28,10 @@ final class FakeAuth {
         }
         server.createContext("/internal/users/", ex -> {
             UUID id = UUID.fromString(ex.getRequestURI().getPath().substring("/internal/users/".length()));
+            String traceparent = ex.getRequestHeaders().getFirst("traceparent");
+            if (traceparent != null) {
+                traceparents.put(id, traceparent);
+            }
             Integer outage = outages.getOrDefault(id, new ArrayDeque<>()).poll();
             String email = emails.get(id);
             int status = outage != null ? outage : email == null ? 404 : 200;

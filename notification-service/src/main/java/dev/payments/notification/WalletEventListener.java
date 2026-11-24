@@ -1,5 +1,7 @@
 package dev.payments.notification;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,10 +23,12 @@ class WalletEventListener {
 
     private final JsonMapper json;
     private final Notifier notifier;
+    private final Counter sent;
 
-    WalletEventListener(JsonMapper json, Notifier notifier) {
+    WalletEventListener(JsonMapper json, Notifier notifier, MeterRegistry meters) {
         this.json = json;
         this.notifier = notifier;
+        this.sent = Counter.builder("notifications.sent").description("Emails sent").register(meters);
     }
 
     @KafkaListener(topics = "${notification.topic}")
@@ -37,6 +41,7 @@ class WalletEventListener {
         }
         for (Notification n : Notifications.about(event)) {
             if (notifier.deliver(n)) {
+                sent.increment();
                 log.info("event {}: emailed user {}: {}", event.id(), n.userId(), n.subject());
             } else {
                 log.info("event {}: user {} already notified, skipping", event.id(), n.userId());

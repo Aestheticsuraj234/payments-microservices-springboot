@@ -34,6 +34,8 @@ public final class FakeWallet {
     private final Map<String, Deque<String>> scripts = new ConcurrentHashMap<>();
     /** Every call, like "hold 3f2c..." or "capture 3f2c... -> 9a1b...". */
     public final List<String> calls = new CopyOnWriteArrayList<>();
+    /** The traceparent header each hold, capture or release arrived with, by hold id and step. */
+    public final Map<String, String> traceparents = new ConcurrentHashMap<>();
     /** How many wallet lookups reached us. */
     public final AtomicInteger lookups = new AtomicInteger();
     /** While true, every wallet lookup answers 503: an outage. */
@@ -90,6 +92,10 @@ public final class FakeWallet {
         }
         UUID holdId = UUID.fromString(path[3]);
         String action = path.length > 4 ? path[4] : "hold";
+        String traceparent = ex.getRequestHeaders().getFirst("traceparent");
+        if (traceparent != null) {
+            traceparents.put(action + ":" + holdId, traceparent);
+        }
         UUID scriptedWallet;
         switch (action) {
             case "hold" -> {

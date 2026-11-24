@@ -38,13 +38,15 @@ public class TransferService {
     private final WalletClient wallets;
     private final TransferProperties properties;
     private final CircuitBreaker walletBreaker;
+    private final TraceContexts traces;
 
     public TransferService(TransferRepository transfers, WalletClient wallets, TransferProperties properties,
-            CircuitBreakerRegistry breakers) {
+            CircuitBreakerRegistry breakers, TraceContexts traces) {
         this.transfers = transfers;
         this.wallets = wallets;
         this.properties = properties;
         this.walletBreaker = breakers.circuitBreaker("wallet");
+        this.traces = traces;
     }
 
     public Accepted create(UUID user, @Nullable String key, @Nullable String from, @Nullable String to,
@@ -84,7 +86,7 @@ public class TransferService {
         }
         errors.throwIfAny();
 
-        return transfers.create(user, key, source.id(), target.id(), amount, currency)
+        return transfers.create(user, key, source.id(), target.id(), amount, currency, traces.current())
                 .map(t -> new Accepted(t, false))
                 // Another request with the same key won the race: answer like a retry.
                 .orElseGet(() -> replay(transfers.findByKey(user, key).orElseThrow(), from, to, amount, currency));

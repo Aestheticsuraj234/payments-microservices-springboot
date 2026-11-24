@@ -1,11 +1,15 @@
 package dev.payments.wallet.events;
 
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.tracing.Span;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -30,7 +34,7 @@ public class OutboxRelay {
     private static final Logger log = LoggerFactory.getLogger(OutboxRelay.class);
 
     /** An outbox row waiting to be published. */
-    record Message(long seq, UUID eventId, String topic, String key, String payload) {
+    record Message(long seq, UUID eventId, String topic, String key, String payload, @Nullable String traceparent) {
     }
 
     /** Sends one message to the broker, and returns only once the broker has it. */
@@ -44,17 +48,38 @@ public class OutboxRelay {
     private final OutboxProperties properties;
 
     public OutboxRelay(JdbcClient jdbc, PlatformTransactionManager txManager, KafkaOperations<String, String> kafka,
-            OutboxProperties properties) {
+            OutboxProperties properties, TraceContexts traces, MeterRegistry meters) {
         this.jdbc = jdbc;
         this.transactions = new TransactionTemplate(txManager);
         this.properties = properties;
         this.sender = message -> {
-            var record = new ProducerRecord<>(message.topic(), message.key(), message.payload());
-            record.headers().add("event_id", message.eventId().toString().getBytes(StandardCharsets.UTF_8));
-            // Wait for the broker's acknowledgement: only then is it safe to
-            // mark the row published.
-            kafka.send(record).get(10, TimeUnit.SECONDS);
+            // Continue the trace of the request that wrote this event. Inside
+            // this span, KafkaTemplate's own span (and the record's traceparent
+            // header) become its children.
+            Span span = traces.continueTrace(message.traceparent(), "outbox publish", Span.Kind.PRODUCER)
+                    .tag("event.id", message.eventId().toString());
+            try (var scope = traces.tracer().withSpan(span)) {
+                var record = new ProducerRecord<>(message.topic(), message.key(), message.payload());
+                record.headers().add("event_id", message.eventId().toString().getBytes(StandardCharsets.UTF_8));
+                // Wait for the broker's acknowledgement: only then is it safe to
+                // mark the row published.
+                kafka.send(record).get(10, TimeUnit.SECONDS);
+            } catch (Exception e) {
+                span.error(e);
+                throw e;
+            } finally {
+                span.end();
+            }
         };
+        // How many events wait to be published. It should hover near zero:
+        // a rising line means Kafka is down or the relay is stuck.
+        Gauge.builder("outbox.unpublished", this, OutboxRelay::unpublished)
+                .description("Events in the outbox not yet published to Kafka")
+                .register(meters);
+    }
+
+    private double unpublished() {
+        return jdbc.sql("SELECT count(*) FROM outbox WHERE published_at IS NULL").query(Long.class).single();
     }
 
     @Scheduled(fixedDelayString = "${wallet.outbox.poll-interval}")
@@ -72,7 +97,7 @@ public class OutboxRelay {
             // over rows another instance's relay has locked, so several
             // instances share the work and never publish the same rows at once.
             List<Message> batch = jdbc.sql("""
-                            SELECT seq, event_id, topic, message_key, payload::text
+                            SELECT seq, event_id, topic, message_key, payload::text, traceparent
                             FROM outbox
                             WHERE published_at IS NULL
                             ORDER BY seq
@@ -81,7 +106,7 @@ public class OutboxRelay {
                             """)
                     .param("limit", properties.batchSize())
                     .query((rs, n) -> new Message(rs.getLong(1), rs.getObject(2, UUID.class), rs.getString(3),
-                            rs.getString(4), rs.getString(5)))
+                            rs.getString(4), rs.getString(5), rs.getString(6)))
                     .list();
             List<Long> sent = sendInOrder(batch, sender);
             if (!sent.isEmpty()) {
