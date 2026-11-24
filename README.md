@@ -21,7 +21,7 @@ Spring way, explaining every decision along the way.
 | 06 | [The API gateway](docs/06-api-gateway.md) | `ch06-api-gateway` | Spring Cloud Gateway, JWT at the edge, Redis rate limits | ✅ |
 | 07 | [Events and the outbox](docs/07-events-outbox.md) | `ch07-events-outbox` | Kafka, the transactional outbox pattern, a relay | ✅ |
 | 08 | [The transfer service and sagas](docs/08-transfer-saga.md) | `ch08-transfer-saga` | Service-to-service HTTP, holds, an orchestrated saga with compensation | ✅ |
-| 09 | The notification service | `ch09-notification-service` | Idempotent consumers, retries, a dead-letter topic, email | planned |
+| 09 | [The notification service](docs/09-notification-service.md) | `ch09-notification-service` | Idempotent consumers, retries, a dead-letter topic, email | ✅ |
 | 10 | Resilience | `ch10-resilience` | Timeouts, retries, circuit breakers, bulkheads | planned |
 | 11 | Observability | `ch11-observability` | Distributed tracing, metrics, dashboards | planned |
 | 12 | Shipping it | `ch12-shipping` | Container images, the whole system in Compose, CI | planned |
@@ -36,16 +36,18 @@ Spring way, explaining every decision along the way.
 
 ```bash
 ./mvnw verify                      # every module: unit tests, then integration tests (needs Docker)
-docker compose up -d --wait        # local infrastructure: PostgreSQL (port 5433), Redis, Kafka
+docker compose up -d --wait        # local infrastructure: PostgreSQL (port 5433), Redis, Kafka, Mailpit
 ./scripts/dev-keys.sh              # a local signing key for auth-service, in secrets/
 ./mvnw -q install -DskipTests
 java -jar auth-service/target/auth-service-1.0.0-SNAPSHOT.jar --auth.private-key-location=file:secrets/auth-signing-key.pem &
 java -jar wallet-service/target/wallet-service-1.0.0-SNAPSHOT.jar &
 java -jar transfer-service/target/transfer-service-1.0.0-SNAPSHOT.jar &
+java -jar notification-service/target/notification-service-1.0.0-SNAPSHOT.jar &
 java -jar gateway/target/gateway-1.0.0-SNAPSHOT.jar &
 ```
 
 Clients use the gateway on port 8080: start with [`api/gateway.http`](api/gateway.http).
+Emails appear in Mailpit at http://localhost:8025.
 
 
 ## License
