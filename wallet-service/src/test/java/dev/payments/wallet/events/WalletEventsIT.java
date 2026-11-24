@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 import dev.payments.wallet.IntegrationTest;
-import dev.payments.wallet.error.RuleViolationException;
+import dev.payments.wallet.holds.HoldService;
 import dev.payments.wallet.ledger.Account;
 import dev.payments.wallet.ledger.WalletService;
 import dev.payments.wallet.money.Money;
@@ -34,6 +34,9 @@ class WalletEventsIT {
 
     @Autowired
     WalletService wallets;
+
+    @Autowired
+    HoldService holds;
 
     @Autowired
     JdbcClient jdbc;
@@ -119,34 +122,30 @@ class WalletEventsIT {
 
     @Test
     void aChangeThatRollsBackLeavesNoEvent() {
-        Account from = wallets.createWallet(UUID.randomUUID(), "GBP");
-        Account to = wallets.createWallet(UUID.randomUUID(), "GBP");
-        long before = outboxRows(from.id());
+        Account wallet = wallets.createWallet(UUID.randomUUID(), "GBP");
+        long before = outboxRows(wallet.id());
 
-        // A transfer refused for insufficient funds: no money moved, so no event.
-        try {
-            wallets.transfer(from.ownerId(), from.id().toString(), to.id().toString(), new Money(100, "GBP"));
-        } catch (RuleViolationException expected) {
-        }
         // A deposit whose surrounding transaction rolls back afterwards.
         try {
             tx.executeWithoutResult(status -> {
-                wallets.deposit(from.ownerId(), from.id(), new Money(100, "GBP"));
+                wallets.deposit(wallet.ownerId(), wallet.id(), new Money(100, "GBP"));
                 throw new IllegalStateException("something after the deposit failed");
             });
         } catch (IllegalStateException expected) {
         }
 
-        assertThat(outboxRows(from.id())).isEqualTo(before);
-        assertThat(wallets.balance(from.ownerId(), from.id()).amount()).isZero();
+        assertThat(outboxRows(wallet.id())).isEqualTo(before);
+        assertThat(wallets.balance(wallet.ownerId(), wallet.id()).amount()).isZero();
     }
 
     @Test
-    void aTransferIsOneEventAboutTheSender() {
+    void aCapturedHoldIsOneTransferEventAboutTheSender() {
         Account from = wallets.createWallet(UUID.randomUUID(), "JPY");
         Account to = wallets.createWallet(UUID.randomUUID(), "JPY");
         wallets.deposit(from.ownerId(), from.id(), new Money(500, "JPY"));
-        wallets.transfer(from.ownerId(), from.id().toString(), to.id().toString(), new Money(200, "JPY"));
+        UUID holdId = UUID.randomUUID();
+        holds.place(holdId, from.ownerId(), from.id(), new Money(200, "JPY"));
+        holds.capture(holdId, to.id());
 
         await().atMost(Duration.ofSeconds(15)).until(() -> eventsFor(from.id()).stream()
                 .anyMatch(e -> e.get("type").asString().equals(WalletEvents.TRANSFER_COMPLETED)));

@@ -3,3 +3,4 @@
 -- on a laptop; in production each could have its own.
 CREATE DATABASE wallet;
 CREATE DATABASE auth;
+CREATE DATABASE transfer;

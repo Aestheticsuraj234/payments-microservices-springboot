@@ -34,5 +34,19 @@ Idempotency-Key: gw-deposit-1
 GET {{gw}}/v1/wallets/{{wallet.response.body.id}}/balance
 Authorization: Bearer {{login.response.body.access_token}}
 
+### Transfer 3.00 to another user's wallet (register and open a wallet for them first).
+### 202 Accepted: the saga runs in the background.
+# @name transfer
+POST {{gw}}/v1/transfers
+Authorization: Bearer {{login.response.body.access_token}}
+Content-Type: application/json
+Idempotency-Key: gw-transfer-1
+
+{"from": "{{wallet.response.body.id}}", "to": "<bob's wallet id>", "amount": 300, "currency": "USD"}
+
+### Watch it finish: pending → funds_held → completed, with every step
+GET {{gw}}/v1/transfers/{{transfer.response.body.id}}
+Authorization: Bearer {{login.response.body.access_token}}
+
 ### Without a token: 401
 GET {{gw}}/v1/wallets/{{wallet.response.body.id}}/balance

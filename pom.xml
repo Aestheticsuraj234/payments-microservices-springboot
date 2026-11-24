@@ -32,6 +32,7 @@
     <modules>
         <module>wallet-service</module>
         <module>auth-service</module>
+        <module>transfer-service</module>
         <module>gateway</module>
     </modules>
 

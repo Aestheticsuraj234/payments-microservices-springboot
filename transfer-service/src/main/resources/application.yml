@@ -1,0 +1,47 @@
+spring:
+  application:
+    name: transfer-service
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+  datasource:
+    url: jdbc:postgresql://localhost:5433/transfer
+    username: payments
+    password: payments
+  http:
+    serviceclient:
+      # The HTTP service group "wallet": every client interface in it calls the
+      # wallet service with these settings. Always set timeouts: the default
+      # is to wait forever.
+      wallet:
+        base-url: http://localhost:8081
+        connect-timeout: 1s
+        read-timeout: 3s
+
+server:
+  port: 8083
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  pattern:
+    level: "%5p [${spring.application.name:-},%X{requestId:-}]"
+
+transfer:
+  max-amount: 100000000
+  saga:
+    poll-interval: 200ms
+    batch-size: 10
+    # How long a claimed transfer is ours: longer than any step takes.
+    lease: 10s
+    # The first retry's delay; it doubles each time, up to max-backoff.
+    backoff: 1s
+    max-backoff: 1m

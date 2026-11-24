@@ -33,7 +33,13 @@ spring:
             - id: wallet
               uri: ${gateway.services.wallet:http://localhost:8081}
               predicates:
-                - Path=/v1/wallets/**,/v1/transfers/**,/v1/transfers
+                - Path=/v1/wallets/**
+            # Transfers moved out of the wallet into their own service in
+            # chapter 8. Clients never noticed: same path, new route.
+            - id: transfer
+              uri: ${gateway.services.transfer:http://localhost:8083}
+              predicates:
+                - Path=/v1/transfers/**,/v1/transfers
 
 server:
   port: 8080

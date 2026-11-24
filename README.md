@@ -20,7 +20,7 @@ Spring way, explaining every decision along the way.
 | 05 | [The auth service](docs/05-auth-service.md) | `ch05-auth-service` | A second service, database per service, Argon2, JWT, refresh tokens | ✅ |
 | 06 | [The API gateway](docs/06-api-gateway.md) | `ch06-api-gateway` | Spring Cloud Gateway, JWT at the edge, Redis rate limits | ✅ |
 | 07 | [Events and the outbox](docs/07-events-outbox.md) | `ch07-events-outbox` | Kafka, the transactional outbox pattern, a relay | ✅ |
-| 08 | The transfer service and sagas | `ch08-transfer-saga` | Service-to-service HTTP, holds, an orchestrated saga with compensation | planned |
+| 08 | [The transfer service and sagas](docs/08-transfer-saga.md) | `ch08-transfer-saga` | Service-to-service HTTP, holds, an orchestrated saga with compensation | ✅ |
 | 09 | The notification service | `ch09-notification-service` | Idempotent consumers, retries, a dead-letter topic, email | planned |
 | 10 | Resilience | `ch10-resilience` | Timeouts, retries, circuit breakers, bulkheads | planned |
 | 11 | Observability | `ch11-observability` | Distributed tracing, metrics, dashboards | planned |
@@ -41,6 +41,7 @@ docker compose up -d --wait        # local infrastructure: PostgreSQL (port 5433
 ./mvnw -q install -DskipTests
 java -jar auth-service/target/auth-service-1.0.0-SNAPSHOT.jar --auth.private-key-location=file:secrets/auth-signing-key.pem &
 java -jar wallet-service/target/wallet-service-1.0.0-SNAPSHOT.jar &
+java -jar transfer-service/target/transfer-service-1.0.0-SNAPSHOT.jar &
 java -jar gateway/target/gateway-1.0.0-SNAPSHOT.jar &
 ```
 
