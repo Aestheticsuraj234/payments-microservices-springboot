@@ -7,6 +7,9 @@ import dev.payments.transfer.error.NotFoundException;
 import dev.payments.transfer.error.UnavailableException;
 import dev.payments.transfer.wallet.WalletClient;
 import dev.payments.transfer.wallet.WalletClient.WalletInfo;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -34,11 +37,14 @@ public class TransferService {
     private final TransferRepository transfers;
     private final WalletClient wallets;
     private final TransferProperties properties;
+    private final CircuitBreaker walletBreaker;
 
-    public TransferService(TransferRepository transfers, WalletClient wallets, TransferProperties properties) {
+    public TransferService(TransferRepository transfers, WalletClient wallets, TransferProperties properties,
+            CircuitBreakerRegistry breakers) {
         this.transfers = transfers;
         this.wallets = wallets;
         this.properties = properties;
+        this.walletBreaker = breakers.circuitBreaker("wallet");
     }
 
     public Accepted create(UUID user, @Nullable String key, @Nullable String from, @Nullable String to,
@@ -105,7 +111,9 @@ public class TransferService {
      * Asks the wallet service about a wallet. This is a synchronous call on
      * the request path: if the wallet service is down, we can't accept
      * transfers. That's a deliberate choice: better to say "try later" than to
-     * accept a transfer we can't check.
+     * accept a transfer we can't check. We don't retry here: the client
+     * retries with its idempotency key, and retrying in two layers multiplies
+     * the load on a struggling wallet.
      */
     private @Nullable WalletInfo lookUp(FieldErrors errors, String field, @Nullable String id) {
         UUID walletId;
@@ -116,7 +124,11 @@ public class TransferService {
             return null;
         }
         try {
-            return wallets.wallet(walletId);
+            return walletBreaker.executeSupplier(() -> wallets.wallet(walletId));
+        } catch (CallNotPermittedException e) {
+            // Fail fast: the user hears "try later" in milliseconds, not after a 3 s timeout,
+            // and no request thread sits waiting on a wallet we know is down.
+            throw new UnavailableException("the wallet service is not available, try again later");
         } catch (HttpClientErrorException e) {
             if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
                 errors.add(field, "no such wallet");

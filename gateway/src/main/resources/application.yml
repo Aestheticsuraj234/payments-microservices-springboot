@@ -30,16 +30,51 @@ spring:
               uri: ${gateway.services.auth:http://localhost:8082}
               predicates:
                 - Path=/v1/auth/**
+              filters:
+                # A service that can't be reached, or times out, trips its
+                # breaker; requests then get the fallback's 503 at once.
+                - name: CircuitBreaker
+                  args:
+                    name: auth
+                    fallbackUri: forward:/fallback/unavailable
             - id: wallet
               uri: ${gateway.services.wallet:http://localhost:8081}
               predicates:
                 - Path=/v1/wallets/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: wallet
+                    fallbackUri: forward:/fallback/unavailable
             # Transfers moved out of the wallet into their own service in
             # chapter 8. Clients never noticed: same path, new route.
             - id: transfer
               uri: ${gateway.services.transfer:http://localhost:8083}
               predicates:
                 - Path=/v1/transfers/**,/v1/transfers
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: transfer
+                    fallbackUri: forward:/fallback/unavailable
+
+    circuitbreaker:
+      resilience4j:
+        # Spring Cloud wraps every breaker in a 1 s time limiter by default,
+        # which would cut off any request slower than a second. The HTTP
+        # client's response-timeout above is the one timeout we want.
+        disable-time-limiter: true
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
 
 server:
   port: 8080

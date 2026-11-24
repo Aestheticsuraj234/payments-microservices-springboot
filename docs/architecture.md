@@ -2,7 +2,7 @@
 
 > This page describes the code on the branch you are reading. Every chapter updates it.
 
-## After chapter 9
+## After chapter 10
 
 Clients talk only to the gateway. It verifies tokens, limits rates, and routes to three services, each
 with its own database. Transfers run as sagas: the transfer service orchestrates holds in the wallet
@@ -74,7 +74,17 @@ flowchart LR
 | `/internal/**` | — (no route: 404) | — |
 
 Every request: `X-Request-ID` set or kept; any client `X-User-ID` removed, then set from the token's
-`sub`; token bucket per user (or IP): 10/s, burst 20; 5 s response timeout.
+`sub`; token bucket per user (or IP): 10/s, burst 20; 5 s response timeout. Each route has its own
+circuit breaker (`auth`, `wallet`, `transfer`); unreachable, timed-out or open ⇒ `503 unavailable`
+Problem Details with `Retry-After: 10`. Spring Cloud's default 1 s time limiter is disabled.
+
+### Resilience: timeouts, breakers, retries
+
+| Call | Timeouts | Breaker | Retries |
+|---|---|---|---|
+| gateway → each service | 1 s connect, 5 s response | per route; window 20, min 10, 50 %, 10 s open | none |
+| transfer → wallet | 1 s / 3 s | `wallet`; window 10, min 5, 50 % failed or > 2 s, 10 s open; 4xx ignored | creation: none; saga steps: backoff + jitter |
+| notification → auth | 1 s / 3 s | none | 4× backoff, then DLT |
 
 ### auth-service API
 
@@ -128,8 +138,9 @@ their owner (others get 404). A transfer's `from` must be the caller's wallet; `
 | `GET` | `/v1/transfers/{id}` | Sender only; `state`, `failure_reason`, `steps` |
 
 Saga: `pending →(hold) funds_held →(capture) completed`; refused hold ⇒ `failed`; refused capture ⇒
-`compensating →(release, retried forever) reversed`. 4xx = refusal, 5xx/timeout = retry with
-exponential backoff and jitter. Claims are 10 s leases; writes are guarded by `version`.
+`compensating →(release, retried forever) reversed`. 4xx = refusal, 5xx/timeout/open breaker = retry
+with exponential backoff and jitter. Claims are 10 s leases; writes are guarded by `version`.
+`/actuator/health` shows the `wallet` breaker's state without failing the service's own health.
 
 ### notification-service
 
@@ -192,12 +203,15 @@ Delivery is at least once: consumers deduplicate by `id`.
 - **Data:** Flyway migrations, `JdbcClient` SQL, invariants enforced in the database.
 - **Events:** written to an outbox in the same transaction as the change; relayed to Kafka; versioned types.
 - **Identity:** the gateway authenticates; services read `X-User-ID` and authorize.
+- **Resilience:** every outbound call has a timeout; synchronous dependencies sit behind a circuit
+  breaker that ignores 4xx; retries happen in one layer only.
 - **Tests:** `*Test` run in `mvn test`; `*IT` (full application, real containers) in `mvn verify`.
 
 ### Package layout
 
 gateway: `dev.payments.gateway` — `GatewayApplication`, `GatewayProperties`, `SecurityConfig`,
-`ProblemEntryPoint`, `RequestIdFilter`, `IdentityFilter`, `RateLimitConfig`; routes in `application.yml`.
+`ProblemEntryPoint`, `RequestIdFilter`, `IdentityFilter`, `RateLimitConfig`, `FallbackController`;
+routes and breakers in `application.yml`.
 
 notification-service: `dev.payments.notification` — `WalletEventListener`, `Notifications` (who gets
 what), `Notifier` (dedupe + send), `WalletEvent` (tolerant reader), `AuthClient`, `KafkaConfig`

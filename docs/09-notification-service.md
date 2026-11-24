@@ -227,4 +227,4 @@ chapter 11 makes the whole flow visible as one trace, from the HTTP request to t
 3. Add `notification_dead_letters_total` as a Micrometer counter (chapter 11 will scrape it).
 4. Run two notification instances and watch the partitions being split between them in the logs.
 
-**Next:** Chapter 10 — Resilience
+**Next:** [Chapter 10 — Resilience](10-resilience.md)

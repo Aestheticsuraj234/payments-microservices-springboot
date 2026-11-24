@@ -1,6 +1,9 @@
 package dev.payments.transfer.wallet;
 
 import dev.payments.transfer.saga.Saga;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import dev.payments.transfer.saga.StepOutcome;
 import dev.payments.transfer.saga.Transfer;
 import java.util.Map;
@@ -13,25 +16,36 @@ import org.springframework.web.client.RestClientResponseException;
  * Runs a saga step against the wallet, and translates what happened into a
  * {@link StepOutcome}. The hold's id is the transfer's id, so every retry of
  * a step is the same idempotent call.
+ *
+ * <p>Every call goes through the "wallet" circuit breaker. While it's open,
+ * calls fail at once without touching the network: a struggling wallet gets
+ * room to recover instead of a queue of sagas hammering it.
  */
 @Component
 public class WalletSteps {
 
     private final WalletClient wallet;
+    private final CircuitBreaker breaker;
 
-    public WalletSteps(WalletClient wallet) {
+    public WalletSteps(WalletClient wallet, CircuitBreakerRegistry breakers) {
         this.wallet = wallet;
+        this.breaker = breakers.circuitBreaker("wallet");
     }
 
     public StepOutcome run(Saga.Step step, Transfer t) {
         try {
-            switch (step) {
-                case HOLD -> wallet.placeHold(t.id(),
-                        new WalletClient.PlaceHold(t.fromWalletId(), t.userId(), t.amount(), t.currency()));
-                case CAPTURE -> wallet.capture(t.id(), new WalletClient.Capture(t.toWalletId()));
-                case RELEASE -> wallet.release(t.id());
-            }
+            breaker.executeRunnable(() -> {
+                switch (step) {
+                    case HOLD -> wallet.placeHold(t.id(),
+                            new WalletClient.PlaceHold(t.fromWalletId(), t.userId(), t.amount(), t.currency()));
+                    case CAPTURE -> wallet.capture(t.id(), new WalletClient.Capture(t.toWalletId()));
+                    case RELEASE -> wallet.release(t.id());
+                }
+            });
             return new StepOutcome.Succeeded();
+        } catch (CallNotPermittedException e) {
+            // The breaker is open: we didn't even try. Certainly "I don't know".
+            return new StepOutcome.Failed("wallet circuit breaker is open");
         } catch (RestClientResponseException e) {
             return isRejection(e.getStatusCode())
                     ? new StepOutcome.Rejected(code(e))

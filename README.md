@@ -22,7 +22,7 @@ Spring way, explaining every decision along the way.
 | 07 | [Events and the outbox](docs/07-events-outbox.md) | `ch07-events-outbox` | Kafka, the transactional outbox pattern, a relay | ✅ |
 | 08 | [The transfer service and sagas](docs/08-transfer-saga.md) | `ch08-transfer-saga` | Service-to-service HTTP, holds, an orchestrated saga with compensation | ✅ |
 | 09 | [The notification service](docs/09-notification-service.md) | `ch09-notification-service` | Idempotent consumers, retries, a dead-letter topic, email | ✅ |
-| 10 | Resilience | `ch10-resilience` | Timeouts, retries, circuit breakers, bulkheads | planned |
+| 10 | [Resilience](docs/10-resilience.md) | `ch10-resilience` | Timeouts, retries, circuit breakers, bulkheads | ✅ |
 | 11 | Observability | `ch11-observability` | Distributed tracing, metrics, dashboards | planned |
 | 12 | Shipping it | `ch12-shipping` | Container images, the whole system in Compose, CI | planned |
 

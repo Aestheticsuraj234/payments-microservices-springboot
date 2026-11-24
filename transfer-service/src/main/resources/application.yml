@@ -30,6 +30,34 @@ management:
     health:
       probes:
         enabled: true
+      show-details: always
+  health:
+    # The breaker's state appears in /actuator/health, but an open breaker
+    # must not make *this* service look unhealthy: we're fine, the wallet isn't.
+    circuitbreakers:
+      enabled: true
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      wallet:
+        # Judge the wallet on its last 10 calls, once there are at least 5.
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        # Open when half of them failed, or were slower than 2 s.
+        failure-rate-threshold: 50
+        slow-call-duration-threshold: 2s
+        slow-call-rate-threshold: 50
+        # While open, every call fails at once. After 10 s, let 2 calls test the water.
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 2
+        automatic-transition-from-open-to-half-open-enabled: true
+        # A 4xx is the wallet working fine and saying no: not a failure.
+        ignore-exceptions:
+          - org.springframework.web.client.HttpClientErrorException
+        register-health-indicator: true
+        allow-health-indicator-to-fail: false
 
 logging:
   pattern:

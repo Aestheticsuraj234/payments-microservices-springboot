@@ -14,6 +14,7 @@ Read the chapters in order: each one builds on the previous ones, and says so at
 | 07 | [Events and the outbox](07-events-outbox.md) |
 | 08 | [The transfer service and sagas](08-transfer-saga.md) |
 | 09 | [The notification service](09-notification-service.md) |
+| 10 | [Resilience](10-resilience.md) |
 
 Living documents, updated by every chapter:
 

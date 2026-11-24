@@ -33,6 +33,10 @@ class TransferSagaIT {
         registry.add("transfer.saga.poll-interval", () -> "50ms");
         registry.add("transfer.saga.backoff", () -> "50ms");
         registry.add("transfer.saga.max-backoff", () -> "200ms");
+        // These tests script many wallet failures on purpose. They test the saga, not the
+        // circuit breaker (WalletBreakerIT does that), so keep the breaker from opening.
+        registry.add("resilience4j.circuitbreaker.instances.wallet.minimum-number-of-calls", () -> 1000);
+        registry.add("resilience4j.circuitbreaker.instances.wallet.sliding-window-size", () -> 1000);
     }
 
     @AfterAll
