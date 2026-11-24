@@ -19,7 +19,7 @@ Spring way, explaining every decision along the way.
 | 04 | [Idempotency keys](docs/04-idempotency.md) | `ch04-idempotency` | Exactly-once money movement over an unreliable network | ✅ |
 | 05 | [The auth service](docs/05-auth-service.md) | `ch05-auth-service` | A second service, database per service, Argon2, JWT, refresh tokens | ✅ |
 | 06 | [The API gateway](docs/06-api-gateway.md) | `ch06-api-gateway` | Spring Cloud Gateway, JWT at the edge, Redis rate limits | ✅ |
-| 07 | Events and the outbox | `ch07-events-outbox` | Kafka, the transactional outbox pattern, a relay | planned |
+| 07 | [Events and the outbox](docs/07-events-outbox.md) | `ch07-events-outbox` | Kafka, the transactional outbox pattern, a relay | ✅ |
 | 08 | The transfer service and sagas | `ch08-transfer-saga` | Service-to-service HTTP, holds, an orchestrated saga with compensation | planned |
 | 09 | The notification service | `ch09-notification-service` | Idempotent consumers, retries, a dead-letter topic, email | planned |
 | 10 | Resilience | `ch10-resilience` | Timeouts, retries, circuit breakers, bulkheads | planned |
@@ -36,7 +36,7 @@ Spring way, explaining every decision along the way.
 
 ```bash
 ./mvnw verify                      # every module: unit tests, then integration tests (needs Docker)
-docker compose up -d --wait        # local infrastructure: PostgreSQL (port 5433), Redis
+docker compose up -d --wait        # local infrastructure: PostgreSQL (port 5433), Redis, Kafka
 ./scripts/dev-keys.sh              # a local signing key for auth-service, in secrets/
 ./mvnw -q install -DskipTests
 java -jar auth-service/target/auth-service-1.0.0-SNAPSHOT.jar --auth.private-key-location=file:secrets/auth-signing-key.pem &

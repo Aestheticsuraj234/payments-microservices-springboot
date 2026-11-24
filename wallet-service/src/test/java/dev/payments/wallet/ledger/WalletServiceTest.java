@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import dev.payments.wallet.config.WalletProperties;
 import dev.payments.wallet.error.NotFoundException;
+import dev.payments.wallet.events.Outbox;
 import dev.payments.wallet.error.RuleViolationException;
 import dev.payments.wallet.error.ValidationException;
 import dev.payments.wallet.money.Money;
@@ -34,7 +35,7 @@ class WalletServiceTest {
             new WalletProperties.Idempotency(java.time.Duration.ofHours(24), java.time.Duration.ofMinutes(1)));
     private final LedgerRepository ledger = mock(LedgerRepository.class);
     private final WalletService service = new WalletService(ledger, new MoneyRules(props), props,
-            new RetryingTransactions(new NoOpTransactionManager()));
+            new RetryingTransactions(new NoOpTransactionManager()), mock(Outbox.class));
 
     private final Account usdWallet = wallet("USD");
 

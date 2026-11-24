@@ -2,10 +2,10 @@
 
 > This page describes the code on the branch you are reading. Every chapter updates it.
 
-## After chapter 6
+## After chapter 7
 
 Clients talk only to the gateway. It verifies tokens, limits rates, and routes to two services, each
-with its own database.
+with its own database. The wallet publishes events to Kafka through a transactional outbox.
 
 ```mermaid
 flowchart LR
@@ -21,6 +21,7 @@ flowchart LR
     gw --- redis[(Redis)]
     auth --- adb[(PostgreSQL: auth)]
     wallet --- wdb[(PostgreSQL: wallet)]
+    wallet -->|outbox relay| kafka[(Kafka: wallet.events)]
 ```
 
 Inside wallet-service:
@@ -32,6 +33,9 @@ flowchart LR
     i --> s[WalletService<br/>ownership rules]
     s --> rt[RetryingTransactions]
     s --> r[LedgerRepository] --> db[(wallet DB)]
+    s --> o[Outbox] --> db
+    relay[OutboxRelay<br/>every 200 ms] --> db
+    relay --> k[(Kafka)]
 ```
 
 ### Services and infrastructure
@@ -43,6 +47,7 @@ flowchart LR
 | `auth-service` | 8082 | Users, argon2id passwords, RS256 access tokens, rotating refresh tokens, JWKS |
 | PostgreSQL 17 | 5433 (host) | One database per service: `wallet`, `auth` |
 | Redis 7 | 6379 | Gateway rate-limit buckets |
+| Kafka 4.2 (KRaft) | 9092 | Events; topic auto-creation off |
 
 ### gateway routes
 
@@ -112,6 +117,18 @@ bytes back with `Idempotent-Replayed: true`. Errors: `idempotency_key_required` 
 | `entries` | Debits and credits; append-only; balanced per transaction at commit |
 | `account_balances` (view) | Balances derived from entries |
 | `idempotency_keys` | One row per key: fingerprint, status, the stored response |
+| `outbox` | Events written with the change they describe; `published_at` set by the relay |
+
+### wallet events (topic `wallet.events`, 3 partitions, key = wallet id)
+
+Envelope: `{"id", "type", "occurred_at", "aggregate_id", "data"}`; the `event_id` is also a header.
+Delivery is at least once: consumers deduplicate by `id`.
+
+| Type | `data` |
+|---|---|
+| `wallet.wallet.created.v1` | `wallet {id, owner_id, currency}` |
+| `wallet.deposit.completed.v1` | `transaction_id`, `wallet`, `amount` |
+| `wallet.transfer.completed.v1` | `transaction_id`, `from`, `to`, `amount` (keyed by `from`) |
 
 ### Cross-cutting conventions (every service follows them)
 
@@ -121,6 +138,7 @@ bytes back with `Idempotent-Replayed: true`. Errors: `idempotency_key_required` 
 - **Logs:** every line carries `[service-name,request-id]`.
 - **Health:** `/actuator/health/liveness` and `/actuator/health/readiness`.
 - **Data:** Flyway migrations, `JdbcClient` SQL, invariants enforced in the database.
+- **Events:** written to an outbox in the same transaction as the change; relayed to Kafka; versioned types.
 - **Identity:** the gateway authenticates; services read `X-User-ID` and authorize.
 - **Tests:** `*Test` run in `mvn test`; `*IT` (full application, real containers) in `mvn verify`.
 
@@ -140,6 +158,7 @@ dev.payments.wallet
 ├── WalletApplication
 ├── config     WalletProperties
 ├── error      PaymentsException hierarchy (incl. Idempotency-, UnauthenticatedException), FieldErrors
+├── events     WalletEvents (the contract), Outbox, OutboxRelay, OutboxProperties, KafkaTopicConfig
 ├── idempotency IdempotencyKey, IdempotencyStore, IdempotentRequests, IdempotencyCleanup
 ├── ledger     Account, Entry, Transaction, Transfer, Posting, LedgerRepository, WalletService,
 │              RetryingTransactions, WalletController, TransferController, Cursor

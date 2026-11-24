@@ -2,6 +2,8 @@ package dev.payments.wallet.ledger;
 
 import dev.payments.wallet.config.WalletProperties;
 import dev.payments.wallet.error.ConflictException;
+import dev.payments.wallet.events.Outbox;
+import dev.payments.wallet.events.WalletEvents;
 import dev.payments.wallet.error.FieldErrors;
 import dev.payments.wallet.error.NotFoundException;
 import dev.payments.wallet.error.RuleViolationException;
@@ -32,13 +34,15 @@ public class WalletService {
     private final MoneyRules moneyRules;
     private final WalletProperties properties;
     private final RetryingTransactions transactions;
+    private final Outbox outbox;
 
     public WalletService(LedgerRepository ledger, MoneyRules moneyRules, WalletProperties properties,
-            RetryingTransactions transactions) {
+            RetryingTransactions transactions, Outbox outbox) {
         this.ledger = ledger;
         this.moneyRules = moneyRules;
         this.properties = properties;
         this.transactions = transactions;
+        this.outbox = outbox;
     }
 
     /** Opens a wallet for an owner, in one currency. An owner can have one wallet per currency. */
@@ -55,11 +59,14 @@ public class WalletService {
         if (ledger.findSystemAccount(SETTLEMENT, currency).isEmpty()) {
             errors.add("currency", "unsupported currency").throwIfAny();
         }
+        Account wallet;
         try {
-            return ledger.createWallet(ownerId, currency);
+            wallet = ledger.createWallet(ownerId, currency);
         } catch (DuplicateKeyException e) {
             throw new ConflictException("owner already has a wallet in " + currency);
         }
+        outbox.enqueue(WalletEvents.WALLET_CREATED, wallet.id(), new WalletEvents.WalletCreated(WalletEvents.Wallet.of(wallet)));
+        return wallet;
     }
 
     /**
@@ -104,9 +111,13 @@ public class WalletService {
         Account settlement = ledger.findSystemAccount(SETTLEMENT, wallet.currency())
                 .orElseThrow(() -> new IllegalStateException("no settlement account for " + wallet.currency()));
 
-        return ledger.post("deposit", List.of(
+        Transaction tx = ledger.post("deposit", List.of(
                 Posting.debit(settlement, amount.amount()),
                 Posting.credit(wallet, amount.amount())));
+        // Same transaction: the event exists if, and only if, the money moved.
+        outbox.enqueue(WalletEvents.DEPOSIT_COMPLETED, wallet.id(),
+                new WalletEvents.DepositCompleted(tx.id(), WalletEvents.Wallet.of(wallet), amount.amount()));
+        return tx;
     }
 
     /**
@@ -141,9 +152,12 @@ public class WalletService {
             if (ledger.balance(from.id()) < amount.amount()) {
                 throw new RuleViolationException(INSUFFICIENT_FUNDS, "insufficient funds");
             }
-            return ledger.post("transfer", List.of(
+            Transaction posted = ledger.post("transfer", List.of(
                     Posting.debit(from, amount.amount()),
                     Posting.credit(to, amount.amount())));
+            outbox.enqueue(WalletEvents.TRANSFER_COMPLETED, from.id(), new WalletEvents.TransferCompleted(
+                    posted.id(), WalletEvents.Wallet.of(from), WalletEvents.Wallet.of(to), amount.amount()));
+            return posted;
         });
         return new Transfer(tx.id(), from.id(), to.id(), amount, tx.createdAt());
     }

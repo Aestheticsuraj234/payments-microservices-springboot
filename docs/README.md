@@ -11,6 +11,7 @@ Read the chapters in order: each one builds on the previous ones, and says so at
 | 04 | [Idempotency keys](04-idempotency.md) |
 | 05 | [The auth service](05-auth-service.md) |
 | 06 | [The API gateway](06-api-gateway.md) |
+| 07 | [Events and the outbox](07-events-outbox.md) |
 
 Living documents, updated by every chapter:
 
