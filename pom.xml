@@ -33,6 +33,7 @@
         <module>wallet-service</module>
         <module>auth-service</module>
         <module>transfer-service</module>
+        <module>notification-service</module>
         <module>gateway</module>
     </modules>
 

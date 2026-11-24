@@ -2,11 +2,12 @@
 
 > This page describes the code on the branch you are reading. Every chapter updates it.
 
-## After chapter 8
+## After chapter 9
 
 Clients talk only to the gateway. It verifies tokens, limits rates, and routes to three services, each
 with its own database. Transfers run as sagas: the transfer service orchestrates holds in the wallet
-over its internal HTTP API. The wallet publishes events to Kafka through a transactional outbox.
+over its internal HTTP API. The wallet publishes events to Kafka through a transactional outbox, and
+the notification service consumes them to email users.
 
 ```mermaid
 flowchart LR
@@ -26,6 +27,11 @@ flowchart LR
     auth --- adb[(PostgreSQL: auth)]
     wallet --- wdb[(PostgreSQL: wallet)]
     wallet -->|outbox relay| kafka[(Kafka: wallet.events)]
+    kafka -->|group: notification| notif[notification-service :8084]
+    notif -->|/internal/users/id| auth
+    notif --> mail[Mailpit SMTP]
+    notif --- ndb[(PostgreSQL: notification)]
+    notif -.->|poison messages| dlt[(wallet.events.dlt)]
 ```
 
 Inside wallet-service:
@@ -51,9 +57,11 @@ flowchart LR
 | `wallet-service` | 8081 | Wallets, deposits, balances, entries, transfers: the double-entry ledger |
 | `auth-service` | 8082 | Users, argon2id passwords, RS256 access tokens, rotating refresh tokens, JWKS |
 | `transfer-service` | 8083 | Transfers between users as orchestrated sagas over wallet holds |
-| PostgreSQL 17 | 5433 (host) | One database per service: `wallet`, `auth`, `transfer` |
+| `notification-service` | 8084 | Emails users about deposits and transfers, from `wallet.events`; no public API |
+| PostgreSQL 17 | 5433 (host) | One database per service: `wallet`, `auth`, `transfer`, `notification` |
 | Redis 7 | 6379 | Gateway rate-limit buckets |
 | Kafka 4.2 (KRaft) | 9092 | Events; topic auto-creation off |
+| Mailpit | 1025 (SMTP), 8025 (UI) | Catches every email |
 
 ### gateway routes
 
@@ -78,6 +86,8 @@ Every request: `X-Request-ID` set or kept; any client `X-User-ID` removed, then 
 | `POST` | `/v1/auth/logout` | Revokes the token's family |
 | `GET` | `/v1/auth/me` | Needs `Authorization: Bearer <access token>` |
 | `GET` | `/.well-known/jwks.json` | Public signing keys |
+
+Internal (no gateway route): `GET /internal/users/{id}` → `{id, email}`, for the notification service.
 
 Access token claims: `iss=payments-auth`, `aud=[payments]`, `sub=<user id>`, `iat`, `exp`, `jti`; header `kid`.
 
@@ -120,6 +130,13 @@ their owner (others get 404). A transfer's `from` must be the caller's wallet; `
 Saga: `pending →(hold) funds_held →(capture) completed`; refused hold ⇒ `failed`; refused capture ⇒
 `compensating →(release, retried forever) reversed`. 4xx = refusal, 5xx/timeout = retry with
 exponential backoff and jitter. Claims are 10 s leases; writes are guarded by `version`.
+
+### notification-service
+
+Consumer group `notification` on `wallet.events` (3 threads). Deposit ⇒ email the owner; transfer ⇒
+email receiver and sender. Deduplicated by `notifications (event_id, user_id)` primary key. Transient
+failures retried 4× with exponential backoff (500 ms ×2); permanent ones (bad JSON, unknown user) and
+exhausted ones go to `wallet.events.dlt`. New groups start at `earliest`.
 
 ### transfer database
 
@@ -181,6 +198,10 @@ Delivery is at least once: consumers deduplicate by `id`.
 
 gateway: `dev.payments.gateway` — `GatewayApplication`, `GatewayProperties`, `SecurityConfig`,
 `ProblemEntryPoint`, `RequestIdFilter`, `IdentityFilter`, `RateLimitConfig`; routes in `application.yml`.
+
+notification-service: `dev.payments.notification` — `WalletEventListener`, `Notifications` (who gets
+what), `Notifier` (dedupe + send), `WalletEvent` (tolerant reader), `AuthClient`, `KafkaConfig`
+(error handler, DLT).
 
 transfer-service: `dev.payments.transfer` — `TransferApplication`, `TransferProperties`, `error`, `web`,
 `saga` (`State`, `Saga`, `StepOutcome`, `Transfer`, `TransferRepository`, `SagaOrchestrator`,

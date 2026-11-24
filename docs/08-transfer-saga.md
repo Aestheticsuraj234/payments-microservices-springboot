@@ -307,4 +307,4 @@ transfer → wallet call resilient, and chapter 11 lets you follow one transfer 
 4. Kill the transfer service between `hold` and `capture` (add a breakpoint, then stop it). Start it
    again. What happens, and which property decides how long it takes?
 
-**Next:** Chapter 9 — The notification service
+**Next:** [Chapter 9 — The notification service](09-notification-service.md)

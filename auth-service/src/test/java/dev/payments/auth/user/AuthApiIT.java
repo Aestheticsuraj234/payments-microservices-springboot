@@ -161,4 +161,20 @@ class AuthApiIT {
 
         assertThat(jwt.verify(new RSASSAVerifier(key))).isTrue();
     }
+
+    @Test
+    void otherServicesCanLookUpWhereToReachAUser() {
+        String email = newEmail();
+        register(email);
+        var tokens = login(email);
+        String id = (String) client.get().uri("/v1/auth/me")
+                .header("Authorization", "Bearer " + tokens.get("access_token"))
+                .exchange().returnResult(Map.class).getResponseBody().get("id");
+
+        client.get().uri("/internal/users/{id}", id).exchange()
+                .expectStatus().isOk()
+                .expectBody().jsonPath("$.email").isEqualTo(email);
+        client.get().uri("/internal/users/{id}", UUID.randomUUID()).exchange()
+                .expectStatus().isNotFound();
+    }
 }

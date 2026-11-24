@@ -1,0 +1,63 @@
+spring:
+  application:
+    name: notification-service
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+  datasource:
+    url: jdbc:postgresql://localhost:5433/notification
+    username: payments
+    password: payments
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      # Our consumer group. Kafka remembers how far the group has read, so a
+      # restart carries on where it stopped; more instances split the partitions.
+      group-id: notification
+      # Where a brand-new group starts reading. "latest" sounds right (no
+      # emails about last week), but it silently skips every event published
+      # between our start and our first partition assignment, which can take
+      # seconds: we lost a demo's emails that way. "earliest" never loses one,
+      # and the notifications table makes re-reading history harmless.
+      auto-offset-reset: earliest
+    listener:
+      # One consumer thread per partition of wallet.events.
+      concurrency: 3
+  mail:
+    # Mailpit in Compose: it catches every email and shows it at http://localhost:8025
+    host: localhost
+    port: 1025
+  http:
+    serviceclient:
+      auth:
+        base-url: http://localhost:8082
+        connect-timeout: 1s
+        read-timeout: 3s
+
+server:
+  port: 8084
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  level:
+    org.apache.kafka: WARN
+
+notification:
+  topic: wallet.events
+  dead-letter-topic: wallet.events.dlt
+  from: payments@example.com
+  retry:
+    # A failing message is retried this many times, waiting longer each time,
+    # then parked on the dead-letter topic so the others can flow.
+    attempts: 4
+    initial-delay: 500ms
+    multiplier: 2
