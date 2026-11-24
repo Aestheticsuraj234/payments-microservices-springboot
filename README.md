@@ -18,7 +18,7 @@ Spring way, explaining every decision along the way.
 | 03 | [Moving money safely](docs/03-safe-transfers.md) | `ch03-safe-transfers` | Row locks, lock ordering, retries, concurrency tests | ✅ |
 | 04 | [Idempotency keys](docs/04-idempotency.md) | `ch04-idempotency` | Exactly-once money movement over an unreliable network | ✅ |
 | 05 | [The auth service](docs/05-auth-service.md) | `ch05-auth-service` | A second service, database per service, Argon2, JWT, refresh tokens | ✅ |
-| 06 | The API gateway | `ch06-api-gateway` | Spring Cloud Gateway, JWT at the edge, Redis rate limits | planned |
+| 06 | [The API gateway](docs/06-api-gateway.md) | `ch06-api-gateway` | Spring Cloud Gateway, JWT at the edge, Redis rate limits | ✅ |
 | 07 | Events and the outbox | `ch07-events-outbox` | Kafka, the transactional outbox pattern, a relay | planned |
 | 08 | The transfer service and sagas | `ch08-transfer-saga` | Service-to-service HTTP, holds, an orchestrated saga with compensation | planned |
 | 09 | The notification service | `ch09-notification-service` | Idempotent consumers, retries, a dead-letter topic, email | planned |
@@ -36,13 +36,16 @@ Spring way, explaining every decision along the way.
 
 ```bash
 ./mvnw verify                      # every module: unit tests, then integration tests (needs Docker)
-docker compose up -d --wait        # local infrastructure (PostgreSQL on port 5433)
+docker compose up -d --wait        # local infrastructure: PostgreSQL (port 5433), Redis
 ./scripts/dev-keys.sh              # a local signing key for auth-service, in secrets/
-./mvnw -pl wallet-service spring-boot:run
-./mvnw -pl auth-service spring-boot:run -Dspring-boot.run.arguments=--auth.private-key-location=file:../secrets/auth-signing-key.pem
+./mvnw -q install -DskipTests
+java -jar auth-service/target/auth-service-1.0.0-SNAPSHOT.jar --auth.private-key-location=file:secrets/auth-signing-key.pem &
+java -jar wallet-service/target/wallet-service-1.0.0-SNAPSHOT.jar &
+java -jar gateway/target/gateway-1.0.0-SNAPSHOT.jar &
 ```
 
-Example requests are in [`api/`](api).
+Clients use the gateway on port 8080: start with [`api/gateway.http`](api/gateway.http).
+
 
 ## License
 

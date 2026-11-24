@@ -45,6 +45,7 @@ class IdempotencyIT {
 
     private EntityExchangeResult<byte[]> deposit(Account wallet, String key, long amount) {
         return client.post().uri("/v1/wallets/{id}/deposits", wallet.id())
+                .header("X-User-ID", wallet.ownerId().toString())
                 .header(IdempotencyKey.HEADER, key)
                 .body(Map.of("amount", amount, "currency", "USD"))
                 .exchange()
@@ -52,7 +53,7 @@ class IdempotencyIT {
     }
 
     private long balance(Account wallet) {
-        return wallets.balance(wallet.id()).amount();
+        return wallets.balance(wallet.ownerId(), wallet.id()).amount();
     }
 
     @Test
@@ -86,7 +87,9 @@ class IdempotencyIT {
 
     @Test
     void requestsThatMoveMoneyNeedAKey() {
-        client.post().uri("/v1/wallets/{id}/deposits", wallet().id())
+        Account wallet = wallet();
+        client.post().uri("/v1/wallets/{id}/deposits", wallet.id())
+                .header("X-User-ID", wallet.ownerId().toString())
                 .body(Map.of("amount", 500, "currency", "USD"))
                 .exchange()
                 .expectStatus().isBadRequest()
@@ -109,7 +112,7 @@ class IdempotencyIT {
         Account wallet = wallet();
         String key = UUID.randomUUID().toString();
         String path = "/v1/wallets/" + wallet.id() + "/deposits";
-        var claim = IdempotencyKey.of(key, IdempotentRequests.ANONYMOUS, "POST", path, new Money(100, "USD"), json);
+        var claim = IdempotencyKey.of(key, wallet.ownerId().toString(), "POST", path, new Money(100, "USD"), json);
         // A request claimed this key ten minutes ago, then its process died.
         jdbc.sql("""
                         INSERT INTO idempotency_keys (scope, key, fingerprint, locked_at, expires_at)
@@ -127,7 +130,7 @@ class IdempotencyIT {
         Account wallet = wallet();
         String key = UUID.randomUUID().toString();
         String path = "/v1/wallets/" + wallet.id() + "/deposits";
-        var claim = IdempotencyKey.of(key, IdempotentRequests.ANONYMOUS, "POST", path, new Money(100, "USD"), json);
+        var claim = IdempotencyKey.of(key, wallet.ownerId().toString(), "POST", path, new Money(100, "USD"), json);
         // Another request claimed it a moment ago and is still running.
         jdbc.sql("""
                         INSERT INTO idempotency_keys (scope, key, fingerprint, expires_at)
@@ -165,5 +168,16 @@ class IdempotencyIT {
             assertThat(r.get()).isIn(HttpStatus.CREATED, HttpStatus.CONFLICT);
         }
         assertThat(balance(wallet)).as("credited exactly once").isEqualTo(250);
+    }
+
+    @Test
+    void keysAreUniquePerCaller() {
+        Account alice = wallet();
+        Account bob = wallet();
+        // Both choose the key "1". They're different operations, so both run.
+        assertThat(deposit(alice, "1", 100).getStatus()).isEqualTo(HttpStatus.CREATED);
+        assertThat(deposit(bob, "1", 200).getStatus()).isEqualTo(HttpStatus.CREATED);
+        assertThat(balance(alice)).isEqualTo(100);
+        assertThat(balance(bob)).isEqualTo(200);
     }
 }

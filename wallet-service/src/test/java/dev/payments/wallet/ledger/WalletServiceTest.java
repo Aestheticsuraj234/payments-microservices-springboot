@@ -67,7 +67,7 @@ class WalletServiceTest {
         var settlement = new Account(UUID.randomUUID(), AccountKind.SYSTEM, null,
                 "settlement", "USD", Direction.DEBIT, Instant.now());
         when(ledger.findAccount(settlement.id())).thenReturn(Optional.of(settlement));
-        catchThrowableOfType(NotFoundException.class, () -> service.wallet(settlement.id()));
+        catchThrowableOfType(NotFoundException.class, () -> service.wallet(UUID.randomUUID(), settlement.id()));
     }
 
     @Test
@@ -75,7 +75,7 @@ class WalletServiceTest {
         when(ledger.findAccount(usdWallet.id())).thenReturn(Optional.of(usdWallet));
 
         var ex = catchThrowableOfType(ValidationException.class,
-                () -> service.deposit(usdWallet.id(), new Money(500, "JPY")));
+                () -> service.deposit(usdWallet.ownerId(), usdWallet.id(), new Money(500, "JPY")));
 
         assertThat(ex.fields()).containsEntry("currency", "must match the wallet's currency, USD");
         verify(ledger, never()).post(anyString(), any());
@@ -84,14 +84,14 @@ class WalletServiceTest {
     @Test
     void validatesPageSizeAndCursor() {
         var ex = catchThrowableOfType(ValidationException.class,
-                () -> service.entries(usdWallet.id(), "garbage!", 0));
+                () -> service.entries(usdWallet.ownerId(), usdWallet.id(), "garbage!", 0));
         assertThat(ex.fields()).containsOnlyKeys("limit", "cursor");
     }
 
     @Test
     void namesTheFieldOfEachBadWallet() {
         var ex = catchThrowableOfType(ValidationException.class,
-                () -> service.transfer("nope", UUID.randomUUID().toString(), new Money(100, "USD")));
+                () -> service.transfer(UUID.randomUUID(), "nope", UUID.randomUUID().toString(), new Money(100, "USD")));
         assertThat(ex.fields())
                 .containsEntry("from", "must be a wallet ID")
                 .containsEntry("to", "no such wallet");
@@ -103,11 +103,11 @@ class WalletServiceTest {
         Account eur = known(wallet("EUR"));
 
         var same = catchThrowableOfType(ValidationException.class,
-                () -> service.transfer(usd.id().toString(), usd.id().toString(), new Money(100, "USD")));
+                () -> service.transfer(usd.ownerId(), usd.id().toString(), usd.id().toString(), new Money(100, "USD")));
         assertThat(same.fields()).containsEntry("to", "must be a different wallet");
 
         var cross = catchThrowableOfType(ValidationException.class,
-                () -> service.transfer(usd.id().toString(), eur.id().toString(), new Money(100, "USD")));
+                () -> service.transfer(usd.ownerId(), usd.id().toString(), eur.id().toString(), new Money(100, "USD")));
         assertThat(cross.fields()).containsEntry("to", "must be a USD wallet, like from");
     }
 
@@ -118,7 +118,7 @@ class WalletServiceTest {
         when(ledger.balance(from.id())).thenReturn(99L);
 
         var ex = catchThrowableOfType(RuleViolationException.class,
-                () -> service.transfer(from.id().toString(), to.id().toString(), new Money(100, "USD")));
+                () -> service.transfer(from.ownerId(), from.id().toString(), to.id().toString(), new Money(100, "USD")));
 
         assertThat(ex.code()).isEqualTo("insufficient_funds");
         verify(ledger, never()).post(anyString(), any());
@@ -135,7 +135,7 @@ class WalletServiceTest {
 
         for (Account from : List.of(low, high)) {
             Account to = from == low ? high : low;
-            service.transfer(from.id().toString(), to.id().toString(), new Money(10, "USD"));
+            service.transfer(from.ownerId(), from.id().toString(), to.id().toString(), new Money(10, "USD"));
         }
 
         InOrder order = inOrder(ledger);
@@ -143,5 +143,21 @@ class WalletServiceTest {
             order.verify(ledger).lock(low.id());
             order.verify(ledger).lock(high.id());
         }
+    }
+
+    @Test
+    void otherPeoplesWalletsDoNotExist() {
+        Account mine = known(wallet("USD"));
+        catchThrowableOfType(NotFoundException.class, () -> service.wallet(UUID.randomUUID(), mine.id()));
+        service.wallet(mine.ownerId(), mine.id());
+    }
+
+    @Test
+    void moneyLeavesOnlyTheCallersOwnWallets() {
+        Account theirs = known(wallet("USD"));
+        Account mine = known(wallet("USD"));
+        var ex = catchThrowableOfType(ValidationException.class, () -> service.transfer(
+                mine.ownerId(), theirs.id().toString(), mine.id().toString(), new Money(100, "USD")));
+        assertThat(ex.fields()).containsEntry("from", "no such wallet").doesNotContainKey("to");
     }
 }

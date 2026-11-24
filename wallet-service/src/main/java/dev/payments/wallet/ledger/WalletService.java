@@ -63,20 +63,23 @@ public class WalletService {
     }
 
     /**
-     * The wallet with the given id. System accounts are ours: to a client,
-     * they don't exist, so they are "not found" rather than "forbidden".
+     * The caller's wallet with the given id. System accounts are ours, and
+     * other people's wallets are theirs: to this caller they don't exist, so
+     * they are "not found" rather than "forbidden", which would confirm that
+     * the id is real.
      */
     @Transactional(readOnly = true)
-    public Account wallet(UUID id) {
+    public Account wallet(UUID caller, UUID id) {
         return ledger.findAccount(id)
                 .filter(Account::isWallet)
+                .filter(a -> caller.equals(a.ownerId()))
                 .orElseThrow(() -> new NotFoundException("wallet not found"));
     }
 
     /** A wallet's balance, derived from its entries. */
     @Transactional(readOnly = true)
-    public Money balance(UUID walletId) {
-        Account wallet = wallet(walletId);
+    public Money balance(UUID caller, UUID walletId) {
+        Account wallet = wallet(caller, walletId);
         return new Money(ledger.balance(wallet.id()), wallet.currency());
     }
 
@@ -86,10 +89,10 @@ public class WalletService {
      * credit to the wallet, which now owes it to the customer.
      */
     @Transactional
-    public Transaction deposit(UUID walletId, Money amount) {
+    public Transaction deposit(UUID caller, UUID walletId, Money amount) {
         var errors = new FieldErrors();
         moneyRules.checkAmount(errors, "amount", amount.amount());
-        Account wallet = wallet(walletId);
+        Account wallet = wallet(caller, walletId);
         // The client must say which currency it means, so 500 can never
         // quietly become 500 yen in a dollar wallet.
         if (!wallet.currency().equals(amount.currency())) {
@@ -114,11 +117,12 @@ public class WalletService {
      * currency or owner. Only the balance can change under us, so the balance
      * check runs inside the transaction, after both wallets are locked.
      */
-    public Transfer transfer(String fromId, String toId, Money amount) {
+    public Transfer transfer(UUID caller, String fromId, String toId, Money amount) {
         var errors = new FieldErrors();
         moneyRules.checkAmount(errors, "amount", amount.amount());
-        Account from = walletField(errors, "from", fromId);
-        Account to = walletField(errors, "to", toId);
+        // Money leaves only the caller's own wallets, and may go to anyone's.
+        Account from = walletField(errors, "from", fromId, caller);
+        Account to = walletField(errors, "to", toId, null);
         if (from != null && to != null) {
             if (from.id().equals(to.id())) {
                 errors.add("to", "must be a different wallet");
@@ -161,13 +165,15 @@ public class WalletService {
     }
 
     /**
-     * Loads the wallet a request field names. A malformed or unknown id is a
-     * problem with that field, recorded in {@code errors}: the result is null.
+     * Loads the wallet a request field names, owned by {@code owner} unless
+     * that is null. A malformed or unknown id is a problem with that field,
+     * recorded in {@code errors}: the result is null.
      */
-    private Account walletField(FieldErrors errors, String field, String id) {
+    private Account walletField(FieldErrors errors, String field, String id, UUID owner) {
         try {
             return ledger.findAccount(UUID.fromString(id))
                     .filter(Account::isWallet)
+                    .filter(a -> owner == null || owner.equals(a.ownerId()))
                     .orElseGet(() -> {
                         errors.add(field, "no such wallet");
                         return null;
@@ -180,7 +186,7 @@ public class WalletService {
 
     /** A page of a wallet's entries, newest first. A null cursor starts at the newest entry. */
     @Transactional(readOnly = true)
-    public EntryPage entries(UUID walletId, String cursor, Integer limit) {
+    public EntryPage entries(UUID caller, UUID walletId, String cursor, Integer limit) {
         int size = limit == null ? properties.pageSize().defaultSize() : limit;
         var errors = new FieldErrors();
         if (size < 1 || size > properties.pageSize().max()) {
@@ -191,7 +197,7 @@ public class WalletService {
             errors.add("cursor", "invalid cursor");
         }
         errors.throwIfAny();
-        wallet(walletId);
+        wallet(caller, walletId);
 
         // Fetch one more than the page holds. If it comes back, there is
         // another page, and we know without counting anything.

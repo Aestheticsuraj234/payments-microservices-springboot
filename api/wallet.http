@@ -1,16 +1,20 @@
-### Requests for the wallet service. Open in IntelliJ's HTTP client or VS Code's REST Client.
+### Requests straight to the wallet service, bypassing the gateway: for debugging only.
+### X-User-ID stands in for what the gateway would set. Clients use api/gateway.http.
 @wallet = http://localhost:8081
 @owner = 7d3c5a8e-1111-4222-8333-944455556666
+@bob = 0b5e2f1a-2222-4333-8444-a55566667777
 
 ### Open a wallet
 # @name created
 POST {{wallet}}/v1/wallets
+X-User-ID: {{owner}}
 Content-Type: application/json
 
-{"owner_id": "{{owner}}", "currency": "USD"}
+{"currency": "USD"}
 
 ### Deposit 10.50. Send it twice: the second response is a replay, and the balance grows once.
 POST {{wallet}}/v1/wallets/{{created.response.body.id}}/deposits
+X-User-ID: {{owner}}
 Content-Type: application/json
 Idempotency-Key: deposit-demo-1
 
@@ -18,19 +22,23 @@ Idempotency-Key: deposit-demo-1
 
 ### Balance
 GET {{wallet}}/v1/wallets/{{created.response.body.id}}/balance
+X-User-ID: {{owner}}
 
 ### Entries, newest first
 GET {{wallet}}/v1/wallets/{{created.response.body.id}}/entries?limit=20
+X-User-ID: {{owner}}
 
 ### A second wallet, for transfers
 # @name bob
 POST {{wallet}}/v1/wallets
+X-User-ID: {{bob}}
 Content-Type: application/json
 
-{"owner_id": "0b5e2f1a-2222-4333-8444-a55566667777", "currency": "USD"}
+{"currency": "USD"}
 
 ### Transfer 3.00 to it
 POST {{wallet}}/v1/transfers
+X-User-ID: {{owner}}
 Content-Type: application/json
 Idempotency-Key: transfer-demo-1
 

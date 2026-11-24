@@ -1,0 +1,57 @@
+spring:
+  application:
+    name: gateway
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  cloud:
+    gateway:
+      server:
+        webflux:
+          # How long to wait for a downstream service. A gateway without
+          # timeouts lets one slow service tie up every connection it has.
+          httpclient:
+            connect-timeout: 1000   # milliseconds
+            response-timeout: 5s
+          # Filters every route gets.
+          default-filters:
+            # Token bucket per user (or IP): refills `replenishRate` tokens per
+            # second, holds at most `burstCapacity`. Over budget: 429.
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@userOrIpKeyResolver}"
+                redis-rate-limiter.replenishRate: ${gateway.rate-limit.replenish-rate:10}
+                redis-rate-limiter.burstCapacity: ${gateway.rate-limit.burst-capacity:20}
+                redis-rate-limiter.requestedTokens: 1
+          # Each route: which requests (predicates) go to which service (uri).
+          routes:
+            - id: auth
+              uri: ${gateway.services.auth:http://localhost:8082}
+              predicates:
+                - Path=/v1/auth/**
+            - id: wallet
+              uri: ${gateway.services.wallet:http://localhost:8081}
+              predicates:
+                - Path=/v1/wallets/**,/v1/transfers/**,/v1/transfers
+
+server:
+  port: 8080
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+gateway:
+  jwk-set-uri: ${gateway.services.auth:http://localhost:8082}/.well-known/jwks.json
+  issuer: payments-auth
+  audience: payments
+  allowed-origins:
+    - http://localhost:3000

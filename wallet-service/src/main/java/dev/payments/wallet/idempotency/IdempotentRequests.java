@@ -1,5 +1,6 @@
 package dev.payments.wallet.idempotency;
 
+import dev.payments.wallet.web.Caller;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.function.Supplier;
 import org.springframework.http.HttpStatus;
@@ -14,17 +15,11 @@ import tools.jackson.databind.json.JsonMapper;
  * stored response into an HTTP response.
  *
  * <pre>{@code
- * return idempotent.run(request, body, HttpStatus.CREATED, () -> service.deposit(...));
+ * return idempotent.run(caller, request, body, HttpStatus.CREATED, () -> service.deposit(...));
  * }</pre>
  */
 @Component
 public class IdempotentRequests {
-
-    /**
-     * Every caller shares one scope until chapter 6, where the gateway tells
-     * us who the caller is and keys become unique per user.
-     */
-    static final String ANONYMOUS = "anonymous";
 
     private final IdempotencyStore store;
     private final JsonMapper json;
@@ -40,9 +35,10 @@ public class IdempotentRequests {
      * becomes the JSON body of a {@code status} response, stored so retries get
      * exactly the same bytes, with an {@code Idempotent-Replayed: true} header.
      */
-    public ResponseEntity<byte[]> run(HttpServletRequest request, Object body, HttpStatus status,
+    public ResponseEntity<byte[]> run(Caller caller, HttpServletRequest request, Object body, HttpStatus status,
             Supplier<Object> work) {
-        IdempotencyKey key = IdempotencyKey.of(request.getHeader(IdempotencyKey.HEADER), ANONYMOUS,
+        // Keys are unique per caller: two users may both choose the key "1".
+        IdempotencyKey key = IdempotencyKey.of(request.getHeader(IdempotencyKey.HEADER), caller.userId().toString(),
                 request.getMethod(), request.getRequestURI(), body, json);
         StoredResponse response = store.run(key,
                 () -> new StoredResponse(status.value(), json.writeValueAsBytes(work.get()), false));
