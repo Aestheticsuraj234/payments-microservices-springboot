@@ -1,5 +1,22 @@
-bin/
-# Private keys and other secrets: never in git.
+# Build output
+target/
+*.class
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# OS
+.DS_Store
+
+# Local secrets (signing keys and the like) never go into git
 secrets/
-# Coverage profiles, from make cover.
-cover.out
+*.pem
+!**/src/test/resources/**/*.pem
+
+# Local environment overrides
+.env
