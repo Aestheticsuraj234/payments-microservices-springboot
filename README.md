@@ -23,7 +23,7 @@ Spring way, explaining every decision along the way.
 | 08 | [The transfer service and sagas](docs/08-transfer-saga.md) | `ch08-transfer-saga` | Service-to-service HTTP, holds, an orchestrated saga with compensation | ✅ |
 | 09 | [The notification service](docs/09-notification-service.md) | `ch09-notification-service` | Idempotent consumers, retries, a dead-letter topic, email | ✅ |
 | 10 | [Resilience](docs/10-resilience.md) | `ch10-resilience` | Timeouts, retries, circuit breakers, bulkheads | ✅ |
-| 11 | Observability | `ch11-observability` | Distributed tracing, metrics, dashboards | planned |
+| 11 | [Observability](docs/11-observability.md) | `ch11-observability` | Distributed tracing, metrics, dashboards | ✅ |
 | 12 | Shipping it | `ch12-shipping` | Container images, the whole system in Compose, CI | planned |
 
 ## Prerequisites
@@ -36,7 +36,7 @@ Spring way, explaining every decision along the way.
 
 ```bash
 ./mvnw verify                      # every module: unit tests, then integration tests (needs Docker)
-docker compose up -d --wait        # local infrastructure: PostgreSQL (port 5433), Redis, Kafka, Mailpit
+docker compose up -d --wait        # PostgreSQL (5433), Redis, Kafka, Mailpit, Jaeger, Prometheus, Grafana
 ./scripts/dev-keys.sh              # a local signing key for auth-service, in secrets/
 ./mvnw -q install -DskipTests
 java -jar auth-service/target/auth-service-1.0.0-SNAPSHOT.jar --auth.private-key-location=file:secrets/auth-signing-key.pem &
@@ -47,7 +47,8 @@ java -jar gateway/target/gateway-1.0.0-SNAPSHOT.jar &
 ```
 
 Clients use the gateway on port 8080: start with [`api/gateway.http`](api/gateway.http).
-Emails appear in Mailpit at http://localhost:8025.
+Emails appear in Mailpit at http://localhost:8025, traces in Jaeger at http://localhost:16686,
+and the dashboard in Grafana at http://localhost:3000.
 
 
 ## License

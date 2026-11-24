@@ -1,11 +1,14 @@
 package dev.payments.notification;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.TopicPartition;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.TopicBuilder;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.listener.ConsumerRecordRecoverer;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.ExponentialBackOffWithMaxRetries;
@@ -28,9 +31,18 @@ class KafkaConfig {
      * </ol>
      */
     @Bean
-    DefaultErrorHandler errorHandler(KafkaTemplate<?, ?> kafka, NotificationProperties properties) {
-        var recoverer = new DeadLetterPublishingRecoverer(kafka,
+    DefaultErrorHandler errorHandler(KafkaTemplate<?, ?> kafka, NotificationProperties properties,
+            MeterRegistry meters) {
+        var deadLetters = new DeadLetterPublishingRecoverer(kafka,
                 (record, ex) -> new TopicPartition(properties.deadLetterTopic(), record.partition()));
+        // Should stay at zero. When it moves, someone should look at the DLT.
+        Counter parked = Counter.builder("notification.dead.letters")
+                .description("Messages given up on and sent to the dead-letter topic")
+                .register(meters);
+        ConsumerRecordRecoverer recoverer = (record, ex) -> {
+            parked.increment();
+            deadLetters.accept(record, ex);
+        };
         var backOff = new ExponentialBackOffWithMaxRetries(properties.retry().attempts());
         backOff.setInitialInterval(properties.retry().initialDelay().toMillis());
         backOff.setMultiplier(properties.retry().multiplier());

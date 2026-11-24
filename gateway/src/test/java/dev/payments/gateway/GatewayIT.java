@@ -11,7 +11,10 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.micrometer.metrics.test.autoconfigure.AutoConfigureMetrics;
+import org.springframework.boot.micrometer.tracing.test.autoconfigure.AutoConfigureTracing;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalManagementPort;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
@@ -28,8 +31,10 @@ import org.testcontainers.containers.GenericContainer;
  * The gateway with real Redis (rate limits) in a container, in front of fake
  * downstream services that echo what they receive.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "management.server.port=0")
 @AutoConfigureWebTestClient
+@AutoConfigureTracing
+@AutoConfigureMetrics
 @Import(GatewayIT.Redis.class)
 class GatewayIT {
 
@@ -49,9 +54,10 @@ class GatewayIT {
         registry.add("gateway.services.auth", services::url);
         registry.add("gateway.services.wallet", services::url);
         registry.add("gateway.services.transfer", services::url);
-        // A small budget, so the rate limit test doesn't need hundreds of requests.
+        // A small budget, so the rate limit test doesn't need hundreds of requests
+        // (but big enough for the other tests' logins, which share one IP's budget).
         registry.add("gateway.rate-limit.replenish-rate", () -> 1);
-        registry.add("gateway.rate-limit.burst-capacity", () -> 3);
+        registry.add("gateway.rate-limit.burst-capacity", () -> 10);
     }
 
     @AfterAll
@@ -111,6 +117,33 @@ class GatewayIT {
     }
 
     @Test
+    void theTraceStartsHereAndTravelsDownstream() {
+        // No traceparent from the client: the gateway starts the trace.
+        client.post().uri("/v1/auth/login").exchange()
+                .expectBody().jsonPath("$.traceparent").value(tp -> assertThat((String) tp).startsWith("00-"));
+
+        // A client that traces (a web app with OpenTelemetry) is continued.
+        String traceId = UUID.randomUUID().toString().replace("-", "");
+        client.post().uri("/v1/auth/login")
+                .header("traceparent", "00-" + traceId + "-" + traceId.substring(0, 16) + "-01")
+                .exchange()
+                .expectBody().jsonPath("$.traceparent").value(tp -> assertThat((String) tp).contains(traceId));
+    }
+
+    @LocalManagementPort
+    int managementPort;
+
+    @Test
+    void metricsAreOnTheManagementPortOnly() {
+        WebTestClient.bindToServer().baseUrl("http://localhost:" + managementPort).build()
+                .get().uri("/actuator/prometheus").exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class).value(body -> assertThat(body).contains("application=\"gateway\""));
+        // The public port has no actuator at all.
+        client.get().uri("/actuator/prometheus").exchange().expectStatus().isNotFound();
+    }
+
+    @Test
     void internalEndpointsAreNotReachableFromOutside() {
         client.get().uri("/internal/wallets/" + UUID.randomUUID())
                 .header("Authorization", "Bearer " + services.token(UUID.randomUUID()))
@@ -156,12 +189,12 @@ class GatewayIT {
     void limitsEachUsersRequestRate() {
         String token = services.token(UUID.randomUUID());
         List<HttpStatusCode> statuses = new ArrayList<>();
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < 15; i++) {
             statuses.add(client.get().uri("/v1/wallets/1")
                     .header("Authorization", "Bearer " + token)
                     .exchange().returnResult(String.class).getStatus());
         }
-        assertThat(statuses.subList(0, 3)).allMatch(s -> s.equals(HttpStatus.OK));
+        assertThat(statuses.subList(0, 10)).allMatch(s -> s.equals(HttpStatus.OK));
         assertThat(statuses).contains(HttpStatus.TOO_MANY_REQUESTS);
 
         // Another user has their own budget.

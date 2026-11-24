@@ -44,10 +44,11 @@ final class FakeServices {
                 sleep(1_500); // slower than Spring Cloud's default 1 s time limiter
             }
             respond(ex, """
-                {"path": "%s", "user": %s, "request_id": "%s"}"""
+                {"path": "%s", "user": %s, "request_id": "%s", "traceparent": %s}"""
                 .formatted(ex.getRequestURI().getPath(),
                         quoteOrNull(ex.getRequestHeaders().getFirst("X-User-ID")),
-                        ex.getRequestHeaders().getFirst("X-Request-ID")));
+                        ex.getRequestHeaders().getFirst("X-Request-ID"),
+                        quoteOrNull(ex.getRequestHeaders().getFirst("traceparent"))));
         });
         server.setExecutor(java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor());
         server.start();

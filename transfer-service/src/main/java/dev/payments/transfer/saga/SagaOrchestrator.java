@@ -2,6 +2,8 @@ package dev.payments.transfer.saga;
 
 import dev.payments.transfer.TransferProperties;
 import dev.payments.transfer.wallet.WalletSteps;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.tracing.Span;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.ThreadLocalRandom;
@@ -28,11 +30,16 @@ public class SagaOrchestrator {
     private final TransferRepository transfers;
     private final WalletSteps wallet;
     private final TransferProperties.Saga config;
+    private final TraceContexts traces;
+    private final MeterRegistry meters;
 
-    public SagaOrchestrator(TransferRepository transfers, WalletSteps wallet, TransferProperties properties) {
+    public SagaOrchestrator(TransferRepository transfers, WalletSteps wallet, TransferProperties properties,
+            TraceContexts traces, MeterRegistry meters) {
         this.transfers = transfers;
         this.wallet = wallet;
         this.config = properties.saga();
+        this.traces = traces;
+        this.meters = meters;
     }
 
     @Scheduled(fixedDelayString = "${transfer.saga.poll-interval}")
@@ -53,16 +60,28 @@ public class SagaOrchestrator {
     void step(Transfer t) {
         Saga.Move move = Saga.moveFrom(t.state());
         String step = move.step().name().toLowerCase();
+        // Each step is a span in the trace of the request that created the
+        // transfer, so the whole saga shows up under that one request.
+        Span span = traces.continueTrace(t.traceparent(), "saga " + step, null)
+                .tag("transfer.id", t.id().toString());
+        try (var scope = traces.tracer().withSpan(span)) {
+            runStep(t, move, step);
+        } finally {
+            span.end();
+        }
+    }
+
+    private void runStep(Transfer t, Saga.Move move, String step) {
         StepOutcome outcome = wallet.run(move.step(), t);
 
         boolean recorded = switch (outcome) {
             case StepOutcome.Succeeded s -> {
                 log.info("transfer {}: {} succeeded, now {}", t.id(), step, move.next());
-                yield transfers.advance(t, move.next(), step, "succeeded", "");
+                yield finished(move.next(), transfers.advance(t, move.next(), step, "succeeded", ""));
             }
             case StepOutcome.Rejected r when move.rejected() != null -> {
                 log.warn("transfer {}: {} rejected ({}), now {}", t.id(), step, r.reason(), move.rejected());
-                yield transfers.advance(t, move.rejected(), step, "rejected", r.reason());
+                yield finished(move.rejected(), transfers.advance(t, move.rejected(), step, "rejected", r.reason()));
             }
             case StepOutcome.Rejected r -> {
                 // A release must not be refused. If it is, a human must look:
@@ -75,12 +94,24 @@ public class SagaOrchestrator {
                 Instant at = nextAttempt(t.attempts());
                 log.warn("transfer {}: {} failed (attempt {}), retrying at {}: {}", t.id(), step,
                         t.attempts() + 1, at, f.detail());
+                meters.counter("saga.step.retries", "step", step).increment();
                 yield transfers.retryLater(t, step, f.detail(), at);
             }
         };
         if (!recorded) {
             log.info("transfer {} moved on without us", t.id());
         }
+    }
+
+    /**
+     * Counts transfers that reached a final state, by state: the system's
+     * business pulse. A rise in "reversed" or "failed" is worth a look.
+     */
+    private boolean finished(State next, boolean recorded) {
+        if (recorded && next.isFinal()) {
+            meters.counter("transfers.finished", "state", next.dbValue()).increment();
+        }
+        return recorded;
     }
 
     /** Exponential backoff with jitter: the delay doubles each attempt, capped, then randomised. */

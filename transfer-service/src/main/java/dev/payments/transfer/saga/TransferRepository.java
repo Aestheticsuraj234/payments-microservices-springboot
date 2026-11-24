@@ -7,6 +7,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -32,7 +33,8 @@ public class TransferRepository {
             rs.getInt("attempts"),
             rs.getInt("version"),
             rs.getObject("created_at", OffsetDateTime.class).toInstant(),
-            rs.getObject("updated_at", OffsetDateTime.class).toInstant());
+            rs.getObject("updated_at", OffsetDateTime.class).toInstant(),
+            rs.getString("traceparent"));
 
     private final JdbcClient jdbc;
 
@@ -41,15 +43,17 @@ public class TransferRepository {
     }
 
     /** Inserts a new transfer, or returns empty if the user already used this key. */
-    public Optional<Transfer> create(UUID userId, String key, UUID from, UUID to, long amount, String currency) {
+    public Optional<Transfer> create(UUID userId, String key, UUID from, UUID to, long amount, String currency,
+            @Nullable String traceparent) {
         return jdbc.sql("""
-                        INSERT INTO transfers (user_id, idempotency_key, from_wallet_id, to_wallet_id, amount, currency)
-                        VALUES (:user, :key, :from, :to, :amount, :currency)
+                        INSERT INTO transfers (user_id, idempotency_key, from_wallet_id, to_wallet_id, amount, currency,
+                                               traceparent)
+                        VALUES (:user, :key, :from, :to, :amount, :currency, :traceparent)
                         ON CONFLICT (user_id, idempotency_key) DO NOTHING
                         RETURNING *
                         """)
                 .param("user", userId).param("key", key).param("from", from).param("to", to)
-                .param("amount", amount).param("currency", currency)
+                .param("amount", amount).param("currency", currency).param("traceparent", traceparent)
                 .query(TRANSFER).optional();
     }
 

@@ -18,6 +18,9 @@ spring:
       acks: all
       properties:
         enable.idempotence: true
+    template:
+      # Each send is a span, and the record carries the trace in a traceparent header.
+      observation-enabled: true
 
 server:
   port: 8081
@@ -25,10 +28,31 @@ server:
   shutdown: graceful
 
 management:
+  # Observability (chapter 11).
+  tracing:
+    sampling:
+      probability: 1.0   # keep every trace on a laptop; production samples, say 0.1
+    propagation:
+      type: w3c          # the standard traceparent header, understood by every service and Kafka
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: http://localhost:4318/v1/traces   # Jaeger, from docker-compose.yml
+  otlp:
+    metrics:
+      export:
+        enabled: false   # metrics are pulled by Prometheus instead
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true   # buckets, so Prometheus can compute p95 latency
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
   endpoint:
     health:
       # /actuator/health/liveness and /actuator/health/readiness, for container platforms
@@ -40,8 +64,8 @@ logging:
     # Kafka clients print their whole configuration at INFO: too much noise.
     org.apache.kafka: WARN
   pattern:
-    # Every log line carries the request ID from RequestIdFilter.
-    level: "%5p [${spring.application.name:-},%X{requestId:-}]"
+    # Every line carries the trace and span ids (set by Micrometer Tracing) and the request id.
+    correlation: "[%X{traceId:-},%X{spanId:-},%X{requestId:-}] "
 
 wallet:
   max-amount: 100000000   # a million dollars, in cents
