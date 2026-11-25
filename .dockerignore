@@ -1,0 +1,8 @@
+# Only what the Dockerfile copies is needed; keep the build context small.
+.git
+reference
+docs
+**/target
+secrets
+.idea
+*.iml
