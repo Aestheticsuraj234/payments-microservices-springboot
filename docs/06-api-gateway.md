@@ -1,7 +1,7 @@
 # Chapter 6 — The API gateway
 
 > **Branch:** `ch06-api-gateway` · **Builds on:** [Chapter 5](05-auth-service.md) ·
-> **Go reference:** `internal/gateway/{gateway,proxy,ratelimit,cors}.go`, `internal/platform/authn`
+> **Go original:** `internal/gateway/{gateway,proxy,ratelimit,cors}.go`, `internal/platform/authn`
 
 ## What you'll learn
 

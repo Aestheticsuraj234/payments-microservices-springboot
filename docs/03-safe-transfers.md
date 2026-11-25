@@ -1,7 +1,7 @@
 # Chapter 3 — Moving money safely
 
 > **Branch:** `ch03-safe-transfers` · **Builds on:** [Chapter 2](02-double-entry-ledger.md) ·
-> **Go reference:** `internal/wallet/transfer.go`, `internal/wallet/ledger.go` (`inTx`),
+> **Go original:** `internal/wallet/transfer.go`, `internal/wallet/ledger.go` (`inTx`),
 > `internal/platform/postgres/retry.go`
 
 ## What you'll learn
@@ -106,7 +106,7 @@ private void lockInOrder(UUID a, UUID b) {
 }
 ```
 
-Any fixed total order works. The Go reference compares UUID bytes; we use `UUID.compareTo`. What
+Any fixed total order works. The Go original compares UUID bytes; we use `UUID.compareTo`. What
 matters is that *every* code path that locks two accounts uses the same order.
 
 ### Retrying a transaction (and only the right ones)

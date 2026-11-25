@@ -1,2 +1,0 @@
-DROP TABLE IF EXISTS dead_letters;
-DROP TABLE IF EXISTS notifications;

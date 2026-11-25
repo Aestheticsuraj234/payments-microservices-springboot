@@ -1,7 +1,7 @@
 # Chapter 7 — Events and the outbox
 
 > **Branch:** `ch07-events-outbox` · **Builds on:** [Chapter 6](06-api-gateway.md) ·
-> **Go reference:** `db/wallet/migrations/000004_outbox.up.sql`, `internal/wallet/events.go`,
+> **Go original:** `db/wallet/migrations/000004_outbox.up.sql`, `internal/wallet/events.go`,
 > `internal/wallet/walletevents/events.go`, `internal/platform/outbox/relay.go`
 
 ## What you'll learn
@@ -110,7 +110,7 @@ exactly that). This is the same deal as chapter 4's idempotency keys, from the o
 - `acks=all` + `enable.idempotence=true`: the producer waits for all in-sync replicas, and its own
   retries don't create duplicates.
 
-> **Go reference difference:** the Go system uses NATS JetStream, which deduplicates by message id
+> **Go original difference:** the Go system uses NATS JetStream, which deduplicates by message id
 > at the broker. Kafka's idempotent producer only deduplicates the producer's own retries within a
 > session, so after a relay crash Kafka *will* store a duplicate. Consumer-side deduplication by
 > event id (chapter 9) handles it.
@@ -227,7 +227,7 @@ through these events, so one trace spans the HTTP request and the email it cause
 
 ## Exercises
 
-1. Add `LISTEN/NOTIFY` (as the Go reference does) so the relay wakes immediately on new rows
+1. Add `LISTEN/NOTIFY` (as the Go original does) so the relay wakes immediately on new rows
    instead of polling. Measure the latency difference.
 2. With two wallet instances, `SKIP LOCKED` lets two relays publish *different* batches at once, so
    two events of one wallet could be published out of order. Design a fix (one relay with leader

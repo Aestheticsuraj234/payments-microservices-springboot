@@ -1,7 +1,7 @@
 # Chapter 5 — The auth service
 
 > **Branch:** `ch05-auth-service` · **Builds on:** [Chapter 4](04-idempotency.md) ·
-> **Go reference:** `internal/auth/{service,tokens,password,http}.go`, `db/auth/migrations/00000{1,2}_*.up.sql`
+> **Go original:** `internal/auth/{service,tokens,password,http}.go`, `db/auth/migrations/00000{1,2}_*.up.sql`
 
 ## What you'll learn
 
@@ -90,7 +90,7 @@ RS256, verifiers hold only the public half. The `kid` (the key's thumbprint) in 
 says which key signed it, so keys can be rotated: publish old and new, sign with new, drop old once
 its tokens expire.
 
-> **Go reference difference:** the Go code signs with Ed25519 (EdDSA). We use RS256 because Spring
+> **Go original difference:** the Go code signs with Ed25519 (EdDSA). We use RS256 because Spring
 > Security and the JDK support it natively without extra crypto libraries. The design is the same.
 
 ### Refresh token rotation and reuse detection

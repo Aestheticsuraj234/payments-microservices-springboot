@@ -4,7 +4,8 @@ A payments backend built **one concept at a time** with Java 21, Spring Boot 4.2
 Every chapter is a branch, a pull request and a document. Read the chapters in order, or check out
 any chapter's branch to see the code exactly as it was at the end of that chapter.
 
-The design is ported from a production-grade Go payments system (kept in [`reference/go`](reference/go)).
+The design is ported from a production-grade Go payments system. The Go code itself is not in this
+tree any more; it lives in the git history, at the tag `go-reference` (see [Chapter 0](docs/00-course-setup.md#a-tour-of-the-go-original)).
 We reuse its database schemas, its API contracts and its rules about money, and rebuild them the
 Spring way, explaining every decision along the way.
 
@@ -23,7 +24,7 @@ flowchart LR
 
 | # | Chapter | Branch | What you build | Status |
 |---|---------|--------|----------------|--------|
-| 00 | [Course setup](docs/00-course-setup.md) | `ch00-course-setup` | The Go reference, the roadmap, the workflow | ✅ |
+| 00 | [Course setup](docs/00-course-setup.md) | `ch00-course-setup` | The Go original, the roadmap, the workflow | ✅ |
 | 01 | [Spring Boot foundations](docs/01-spring-boot-foundations.md) | `ch01-spring-boot-foundations` | Maven multi-module build, wallet-service skeleton, config, errors, logging | ✅ |
 | 02 | [The double-entry ledger](docs/02-double-entry-ledger.md) | `ch02-double-entry-ledger` | Flyway, `JdbcClient`, wallets, deposits, balances, pagination, Testcontainers | ✅ |
 | 03 | [Moving money safely](docs/03-safe-transfers.md) | `ch03-safe-transfers` | Row locks, lock ordering, retries, concurrency tests | ✅ |
@@ -82,5 +83,5 @@ docker compose up -d --wait        # infrastructure only, then run any service f
 
 ## License
 
-[MIT](LICENSE). The Go reference in `reference/go` is the work of its original author, under the same license.
+[MIT](LICENSE). The Go original this course ports is the work of its original author, under the same license.
 This is teaching code: treat it as a starting point, not a drop-in system for moving real money.

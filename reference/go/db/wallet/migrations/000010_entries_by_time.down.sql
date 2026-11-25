@@ -1,1 +1,0 @@
-DROP INDEX CONCURRENTLY IF EXISTS entries_account_id_created_at_idx;

@@ -1,7 +1,7 @@
 # Chapter 8 — The transfer service and sagas
 
 > **Branch:** `ch08-transfer-saga` · **Builds on:** [Chapter 7](07-events-outbox.md) ·
-> **Go reference:** `internal/transfer/{saga,state,store,transfer,http,wallet}.go`,
+> **Go original:** `internal/transfer/{saga,state,store,transfer,http,wallet}.go`,
 > `internal/wallet/holds.go`, `db/transfer/migrations/000001_transfers.up.sql`,
 > `db/wallet/migrations/000005_holds.up.sql`
 
@@ -23,7 +23,7 @@ credit, commit. It was atomic because both wallets lived in one database.
 
 Now transfers get their own service. Why? Transfers will grow their own life — fraud screening,
 manual review, limits, scheduled and recurring payments, cancellation — none of which belongs in
-the ledger. The ledger should do one thing: keep the books. (The Go reference grows exactly this
+the ledger. The ledger should do one thing: keep the books. (The Go original grows exactly this
 way: episode 19 adds risk review to the transfer service without touching the wallet.)
 
 But the transfer service has its own database (chapter 5's rule). Its transfer row and the

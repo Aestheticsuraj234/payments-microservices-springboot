@@ -2,7 +2,7 @@ spring:
   application:
     name: wallet-service
   jackson:
-    # Our JSON API speaks snake_case (created_at, owner_id), like the Go reference.
+    # Our JSON API speaks snake_case (created_at, owner_id), like the Go original.
     property-naming-strategy: SNAKE_CASE
   datasource:
     # Matches docker-compose.yml. Override with SPRING_DATASOURCE_* environment variables.
