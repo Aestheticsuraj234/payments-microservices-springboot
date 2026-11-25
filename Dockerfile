@@ -5,6 +5,8 @@
 # no JDK, no Maven, no source code.
 
 # --- 1. Build the service's jar, with Maven's downloads cached between builds.
+# sharing=locked: Compose builds the five images in parallel, and two Maven
+# runs writing one repository at once trip over each other.
 FROM eclipse-temurin:21-jdk-noble AS build
 ARG SERVICE
 WORKDIR /src
@@ -16,7 +18,7 @@ COPY transfer-service/pom.xml transfer-service/
 COPY notification-service/pom.xml notification-service/
 COPY gateway/pom.xml gateway/
 COPY ${SERVICE}/src ${SERVICE}/src
-RUN --mount=type=cache,target=/root/.m2 \
+RUN --mount=type=cache,target=/root/.m2,sharing=locked \
     ./mvnw -B -q -pl ${SERVICE} -am package -DskipTests \
  && cp ${SERVICE}/target/${SERVICE}-*.jar /app.jar
 

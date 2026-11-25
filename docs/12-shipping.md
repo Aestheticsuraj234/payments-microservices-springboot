@@ -55,7 +55,7 @@ Why each choice:
 | Choice | Reason |
 |---|---|
 | Multi-stage | The runtime image has no JDK, no Maven, no source: smaller and less to attack |
-| `--mount=type=cache` for `~/.m2` | Dependencies download once, not once per service per build |
+| `--mount=type=cache,sharing=locked` for `~/.m2` | Dependencies download once, not once per service per build; `locked` stops parallel builds racing on it |
 | Layered jar, dependencies first | Docker caches layers in order; a code change rebuilds and ships only the small `application` layer |
 | JRE, not JDK, at runtime | No compiler in production |
 | Non-root user | A compromised process can't own the container |
@@ -106,6 +106,14 @@ KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,INTERNAL://kafka:29092
 **Secrets are files.** The auth service's signing key is a Compose secret mounted at
 `/run/secrets/auth-signing-key`, and `AUTH_PRIVATE_KEY_LOCATION` points to it. Environment variables
 leak into logs, crash reports and `docker inspect`; files don't.
+
+> **A bug CI caught on the first run.** On macOS everything passed; on the Linux CI runner the
+> auth service died with `/run/secrets/auth-signing-key (Permission denied)`. A Compose file
+> secret is a bind mount, and on Linux it keeps the host file's owner and mode. Our script wrote
+> the key with mode `600`, and the container runs as uid 10001, not as you. The dev key is now
+> written `644` (it's a throwaway laptop key); in Kubernetes, a Secret volume's `defaultMode` and
+> the pod's `fsGroup` set this for you. This is exactly why the `system` job exists: Docker
+> Desktop hid the problem.
 
 **Health checks gate startup.** Each service's health check calls its own
 `/actuator/health/readiness`. The JRE image has no `curl`, so the check uses bash's `/dev/tcp`.
