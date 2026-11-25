@@ -1,7 +1,7 @@
 # Chapter 10 — Resilience
 
 > **Branch:** `ch10-resilience` · **Builds on:** [Chapter 9](09-notification-service.md) ·
-> **Go reference:** the deadlines in `internal/wallet/walletclient/client.go`, the gateway's timeouts in
+> **Go original:** the deadlines in `internal/wallet/walletclient/client.go`, the gateway's timeouts in
 > `internal/gateway/proxy.go`, and the bulkhead in episode 22
 
 ## What you'll learn
@@ -271,6 +271,6 @@ dependency struggling before users do.
    retry settings? (Hint: how quickly would messages exhaust their four retries and pile onto the DLT?)
    Design a better reaction: pause the listener container while auth is down.
 3. Put [Toxiproxy](https://github.com/Shopify/toxiproxy) between transfer-service and the wallet
-   (the Go reference does in `deploy/chaos`) and add 2 s of latency. Which breaker setting reacts?
+   (the Go original does in `deploy/chaos`) and add 2 s of latency. Which breaker setting reacts?
 
 **Next:** [Chapter 11 — Observability](11-observability.md)

@@ -1,7 +1,7 @@
 # Chapter 2 — The double-entry ledger
 
 > **Branch:** `ch02-double-entry-ledger` · **Builds on:** [Chapter 1](01-spring-boot-foundations.md) ·
-> **Go reference:** `db/wallet/migrations/00000{1,2}_*.up.sql`, `db/wallet/queries/{accounts,ledger}.sql`,
+> **Go original:** `db/wallet/migrations/00000{1,2}_*.up.sql`, `db/wallet/queries/{accounts,ledger}.sql`,
 > `internal/wallet/{service,ledger,store,http}.go`
 
 ## What you'll learn
@@ -145,7 +145,7 @@ in `flyway_schema_history`. **Never edit a migration that has run anywhere**: ad
 - [`V2__wallets.sql`](../wallet-service/src/main/resources/db/migration/V2__wallets.sql) — wallet vs
   system accounts, one settlement account per supported currency (EUR, GBP, JPY, USD).
 
-They are ported from the Go reference almost verbatim; only `BEGIN`/`COMMIT` are gone, because
+They are ported from the Go original almost verbatim; only `BEGIN`/`COMMIT` are gone, because
 Flyway wraps each migration in a transaction itself.
 
 ### 4. The domain records
@@ -251,7 +251,7 @@ says "the rows after the last one you saw", and the index on `(account_id, id)` 
 there: every page costs the same. It also behaves when new entries arrive between pages (offsets
 would shift and repeat rows).
 
-Two tricks from the Go reference:
+Two tricks from the Go original:
 
 - **Fetch `limit + 1` rows.** If the extra row comes back there is another page, with no `COUNT(*)`.
 - **Opaque cursors.** The cursor is the last entry's id, base64-encoded. Clients must treat it as a

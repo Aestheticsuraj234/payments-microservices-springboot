@@ -1,7 +1,7 @@
 # Chapter 4 — Idempotency keys
 
 > **Branch:** `ch04-idempotency` · **Builds on:** [Chapter 3](03-safe-transfers.md) ·
-> **Go reference:** `internal/platform/idempotency/{idempotency,store}.go`,
+> **Go original:** `internal/platform/idempotency/{idempotency,store}.go`,
 > `db/wallet/migrations/000003_idempotency_keys.up.sql`
 
 ## What you'll learn
@@ -188,7 +188,7 @@ public <T> T run(Supplier<T> work) {
 }
 ```
 
-The Go reference does the same thing: a store bound to a caller's transaction "just joins it".
+The Go original does the same thing: a store bound to a caller's transaction "just joins it".
 
 ## Run it
 
@@ -240,7 +240,7 @@ This also completes the wallet as a standalone service. In chapter 5 we build a 
 
 ## Exercises
 
-1. Add the Go reference's Redis fast path: cache completed responses for a few minutes and check
+1. Add the Go original's Redis fast path: cache completed responses for a few minutes and check
    the cache before claiming. What happens if Redis is down? (It must only be an optimisation.)
 2. Make `IdempotencyCleanup` delete in batches of 1,000 so it never holds a long lock.
 3. Write a test where the client retries *while* the first request is blocked on a wallet lock.

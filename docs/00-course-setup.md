@@ -1,12 +1,12 @@
 # Chapter 0 — Course setup
 
-> **Branch:** `ch00-course-setup` · **Builds on:** nothing · **Go reference:** the whole of [`reference/go`](../reference/go)
+> **Branch:** `ch00-course-setup` · **Builds on:** nothing · **Go original:** the whole Go project (tag `go-reference`)
 
 ## What you'll learn
 
 - What we are building, and why a payments system is a good way to learn microservices
 - The rules about money that every chapter respects
-- How the Go reference system maps to Spring Boot, and the decisions behind that mapping
+- How the Go original system maps to Spring Boot, and the decisions behind that mapping
 - How the course is organised: one chapter, one branch, one pull request
 
 ## Why this course starts from an existing system
@@ -56,7 +56,7 @@ flowchart LR
 
 ## The rules about money
 
-These come straight from the Go reference, and the code never breaks them:
+These come straight from the Go original, and the code never breaks them:
 
 1. **Money is an integer count of minor units** (cents for USD, yen for JPY). Never a `double`.
    In Java that means `long`, not `double`, and not even `BigDecimal` for stored amounts.
@@ -71,7 +71,20 @@ These come straight from the Go reference, and the code never breaks them:
 
 You will see each rule turn into code in a specific chapter.
 
-## A tour of the Go reference
+## A tour of the Go original
+
+The Go code lived in `reference/go/` while the course was written, and was removed once every
+chapter was done: this repository is a Java project. Nothing is lost. The tag `go-reference` marks
+the last commit that has it, and the Go project's own history (one commit per Go episode) is the
+first 25 commits of this repository, from before chapter 0 moved the code into `reference/go/`:
+
+```bash
+git log --oneline --reverse | head -25            # the Go project's history, episode by episode
+git checkout go-reference -- reference/go         # bring the code back into your working tree
+git rm -rfq reference                             # and put it away again
+```
+
+Its layout, which the chapters refer to:
 
 ```
 reference/go/
@@ -86,12 +99,13 @@ reference/go/
 └── api/*.http                  example requests
 ```
 
-Its git history (25 commits, one per episode) is still here: run `git log -- reference/go` to read it.
-Each chapter links to the Go files it ports.
+Each chapter's header names the Go files it ports, as paths inside `reference/go/`. The first line
+of each Flyway migration also says which Go migration it came from; those comments stay as written,
+because editing a migration that has already run changes its checksum (chapter 2).
 
 ## From Go to Spring: the translation table
 
-| Concern | Go reference | This course | Why |
+| Concern | Go original | This course | Why |
 |---|---|---|---|
 | Web layer | `net/http` handlers | Spring MVC `@RestController` | The Spring default; familiar to the learner |
 | SQL | `sqlc` (SQL in, typed code out) | Spring JDBC `JdbcClient` | A ledger is set-based, append-only SQL. Explicit SQL keeps the locking and the invariants visible. JPA would hide them. |
@@ -123,7 +137,7 @@ Each chapter links to the Go files it ports.
 | 11 | Observability | Following one request through five services | 14 |
 | 12 | Shipping it | Images, Compose, CI | 16 |
 
-Topics the Go reference covers that we leave for after the course — each is a good self-directed
+Topics the Go original covers that we leave for after the course — each is a good self-directed
 exercise with the reference code as your guide: outbound webhooks (ep 17), multi-currency and FX
 (ep 18), fraud checks (ep 19), reconciliation and reporting (ep 20), mTLS and security hardening
 (ep 21), Kubernetes (ep 23) and chaos testing (ep 24).

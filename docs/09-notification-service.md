@@ -1,7 +1,7 @@
 # Chapter 9 — The notification service
 
 > **Branch:** `ch09-notification-service` · **Builds on:** [Chapter 8](08-transfer-saga.md) ·
-> **Go reference:** `internal/notification/{consume,notifier,store,users,message}.go`,
+> **Go original:** `internal/notification/{consume,notifier,store,users,message}.go`,
 > `db/notification/migrations/000001_notifications.up.sql`
 
 ## What you'll learn
@@ -104,7 +104,7 @@ would block every message behind it in its partition: one malformed event and no
 again. Parking it on the DLT (with headers saying which topic, partition, offset and exception)
 lets the partition move on, and keeps the message for a human to inspect and replay.
 
-> **Go reference difference:** the Go notifier writes dead letters to a database table with a replay
+> **Go original difference:** the Go notifier writes dead letters to a database table with a replay
 > endpoint. A DLT topic is the Kafka-native equivalent; Spring Kafka ships the recoverer for it.
 
 ### The tolerant reader

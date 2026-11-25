@@ -1,7 +1,7 @@
 # Chapter 12 — Shipping it
 
 > **Branch:** `ch12-shipping` · **Builds on:** [Chapter 11](11-observability.md) ·
-> **Go reference:** `Dockerfile`, `docker-compose.yml` (`app` profile), `.github/workflows/ci.yml` (episode 16)
+> **Go original:** `Dockerfile`, `docker-compose.yml` (`app` profile), `.github/workflows/ci.yml` (episode 16)
 
 ## What you'll learn
 
@@ -218,7 +218,7 @@ failures, one trace per transfer — is now checked end to end on every pull req
 
 ## Where to go next
 
-The Go reference goes further, and each topic is a good project on top of this course, with the
+The Go original goes further, and each topic is a good project on top of this course, with the
 reference code as your guide:
 
 | Topic | Go episode | Ideas |
@@ -236,7 +236,7 @@ reference code as your guide:
 
 1. Build images with Cloud Native Buildpacks instead (`./mvnw -pl wallet-service spring-boot:build-image`)
    and compare size, build time and what you had to write.
-2. Add a `readOnly: true` root filesystem and `cap_drop: [ALL]` to the services, as the Go reference does.
+2. Add a `readOnly: true` root filesystem and `cap_drop: [ALL]` to the services, as the Go original does.
    What does the JVM need writable? (Hint: `/tmp`.)
 3. Push images to GitHub Container Registry from CI on merges to `main`, tagged with the commit SHA.
 4. Make the smoke test also prove idempotency: send the transfer twice with the same key and check

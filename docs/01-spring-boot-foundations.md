@@ -1,7 +1,7 @@
 # Chapter 1 — Spring Boot foundations
 
 > **Branch:** `ch01-spring-boot-foundations` · **Builds on:** [Chapter 0](00-course-setup.md) ·
-> **Go reference:** `cmd/wallet/main.go`, `internal/platform/config`, `internal/platform/apperr`,
+> **Go original:** `cmd/wallet/main.go`, `internal/platform/config`, `internal/platform/apperr`,
 > `internal/platform/httpx/{errors,requestid}.go`
 
 ## What you'll learn
@@ -104,7 +104,7 @@ Content-Type: application/problem+json
 - `fields` appears on validation errors and lists *every* bad field at once.
 - `request_id` lets a support engineer find the logs.
 
-The Go reference has the same idea with a custom envelope (`{"error": {"code": ...}}`). We use the
+The Go original has the same idea with a custom envelope (`{"error": {"code": ...}}`). We use the
 standard, because Spring supports it natively and clients may already have tooling for it.
 
 | Exception | Status | `code` |

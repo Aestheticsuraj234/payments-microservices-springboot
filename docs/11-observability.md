@@ -1,7 +1,7 @@
 # Chapter 11 — Observability
 
 > **Branch:** `ch11-observability` · **Builds on:** [Chapter 10](10-resilience.md) ·
-> **Go reference:** `internal/platform/telemetry`, `internal/platform/outbox/relay.go` (trace carry),
+> **Go original:** `internal/platform/telemetry`, `internal/platform/outbox/relay.go` (trace carry),
 > `db/*/migrations/*_trace_context.up.sql`, `deploy/{prometheus,grafana}`
 
 ## What you'll learn
@@ -54,7 +54,7 @@ database row that another thread picks up seconds later. We have two such places
 - the **saga**: the HTTP request writes the transfer; the orchestrator runs its steps later.
 
 Without help, each would start a fresh trace, and the transfer would appear as several unrelated
-traces. So we do what the Go reference does: **store the `traceparent` with the row**, and when the
+traces. So we do what the Go original does: **store the `traceparent` with the row**, and when the
 background loop picks the row up, **start a span whose parent is the stored context**.
 
 ```java
@@ -174,7 +174,7 @@ flowchart LR
    `WalletEventListener` and the DLT recoverer in `KafkaConfig`.
 7. **Gateway management port** — the gateway's actuator moves to **port 9080**
    (`management.server.port`), never published. Prometheus scrapes it; the public port 8080 has no
-   `/actuator` at all (a test checks). The Go reference does the same.
+   `/actuator` at all (a test checks). The Go original does the same.
 8. **Infrastructure** — Jaeger, Prometheus ([`prometheus.yml`](../deploy/prometheus/prometheus.yml),
    scraping the services on your machine through `host.docker.internal`) and Grafana, provisioned
    with both datasources and the [Payments dashboard](../deploy/grafana/dashboards/payments.json):
